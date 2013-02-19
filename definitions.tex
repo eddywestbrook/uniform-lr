@@ -1,0 +1,287 @@
+
+%%%
+%%% spacing
+%%%
+
+\newlength{\indlen}
+\setlength{\indlen}{8pt}
+\newcommand{\ind}[1]{\hspace{#1\indlen}} % stands for indent
+\newcommand{\figfill}[1][9pt]{\hspace{#1}\hfill}
+
+
+%%%
+%%% theorem/proof constructs
+%%%
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{definition}{Definition}
+\newtheorem{corollary}{Corollary}
+
+% proof environment
+\iftechreport
+\newenvironment{myproof}
+               {\hspace{-1\parindent}\textbf{Proof:}}
+               {\hfill $\square$}
+\else
+\newenvironment{myproof}
+               {\begin{IEEEproof}}
+               {\end{IEEEproof}}
+\fi
+
+
+%%%
+%%% for writing grammars
+%%%
+
+\newcommand{\borspacing}{\hspace{.5em}}
+\newcommand{\doublebar}{\protect\rule[-2pt]{1pt}{1em}\hspace{1pt}\protect\rule[-2pt]{1pt}{1em}}
+\newcommand{\singlebar}{\protect\rule[-2pt]{1pt}{1em}}
+\newcommand{\borstar}{\borspacing\singlebar}
+%\newcommand{\borstar}{\doublebar\borspacing}
+%\newcommand{\borstar}{|\borspacing}
+\newcommand{\bor}{\borstar\borspacing} % stands for bar-or, for use in grammars
+
+
+%%%
+%%% for repetitive commands that just set the font face
+%%%
+
+\newcommand{\definermcommand}[2]{\newcommand{#1}{\ensuremath{\mathrm{#2}}}}
+\newcommand{\definesfcommand}[2]{\newcommand{#1}{\ensuremath{\mathsf{#2}}}}
+\newcommand{\definebfcommand}[2]{\newcommand{#1}{\ensuremath{\mathbf{#2}}}}
+
+
+%%%
+%%% type theory constructs
+%%%
+
+\definesfcommand{\Type}{Type}
+\definesfcommand{\Prop}{Prop}
+\definesfcommand{\Name}{Name}
+
+\newcommand{\To}{\Rightarrow}
+\newcommand{\lamabs}[3]{\lambda\,#1 \! : \! #2 \,.\, #3}
+\newcommand{\lamabsnot}[2]{\lambda #1.\,#2}
+\newcommand{\tlamabsnot}[2]{\Lambda #1.\,#2}
+\newcommand{\lamgamma}[2][\Gamma]{\lambda #1\,.\,#2}
+\newcommand{\nuabs}[3]{\nu\,#1 \! : \! #2 \,.\, #3}
+\newcommand{\nugamma}[2]{\nu\,#1 \,.\, #2}
+\newcommand{\nuabsnot}[2]{\nu\,#1\,.\,#2}
+\newcommand{\pitype}[3]{\Pi #1\!:\!#2\,.\,#3}
+\newcommand{\pitypenot}[2]{\Pi #1\,.\,#2}
+\newcommand{\pigamma}[2]{\Pi #1\,.\,#2}
+\newcommand{\nabtype}[3]{\nabla #1\!:\!#2\,.\,#3}
+\newcommand{\nabgamma}[2]{\nabla #1\,.\,#2}
+\newcommand{\namearg}[1]{\ensuremath{@\;#1}}
+\newcommand{\namerepl}[2]{\ensuremath{#1\;\namearg{#2}}}
+\newcommand{\subtype}{\ensuremath{<:}}
+\newcommand{\ctorapp}[3]{#1(#2; #3)}
+\newcommand{\uapp}[2]{#1(#2)}
+
+%% sorts
+\definermcommand{\impred}{i}
+\definermcommand{\pred}{p}
+\newcommand{\spred}{s^{\pred}}
+\newcommand{\simpred}{s^{\impred}}
+\newcommand{\sip}{s^{ip}}
+
+%% pattern-matching functions
+\newcommand{\funmatch}[5]{\mathbf{fun}\;#1\;(#2)\;(#3)\;(#4;#5)}
+\newcommand{\funmatchi}[6]{\mathbf{fun}^{#1}\;#2\;(#3)\;(#4)\;(#5;#6)}
+\newcommand{\pattern}[2]{#1 \backslash #2}
+\newcommand{\pc}[3]{\pcnoctxt{\pattern{#1}{#2}}{#3}}
+\newcommand{\pcnoctxt}[2]{#1 \to #2}
+\newcommand{\pmfun}[4][]{\mathbf{fun}^{#1}\;#2\;(#3)\;(#4)}
+\newcommand{\ppmfun}[3]{\pmfun[\pred]{#1}{#2}{#3}}
+\newcommand{\ipmfun}[3]{\pmfun[\impred]{#1}{#2}{#3}}
+\newcommand{\pmfunsimp}[1]{\mathbf{fun}\;(#1)}
+\newcommand{\caseof}[2]{\mathbf{case}\;#1\;\mathbf{of}\;#2}
+
+%% contexts
+\newcommand{\gxform}[2][x]{#1:#2}
+\newcommand{\guform}[4][u]{#1:^{#2;#3} #4}
+\newcommand{\Gammaarg}{\Gamma_{\mathsf{arg}}}
+\newcommand{\Gammap}{\Gamma_{\mathsf{p}}}
+\newcommand{\Gammaa}{\Gamma_{\mathsf{a}}}
+\newcommand{\Gammac}{\Gamma_{\mathsf{c}}}
+\newcommand{\Gammaci}[1][i]{\Gamma_{\mathsf{c}_{#1}}}
+\newcommand{\ctxtsel}[2]{#1|_{#2}}
+
+
+%%%
+%%% examples
+%%%
+
+\definesfcommand{\nat}{nat}
+\definesfcommand{\z}{z}
+\definesfcommand{\s}{s}
+\definesfcommand{\False}{False}
+
+\definesfcommand{\ord}{ord}
+\definesfcommand{\ordz}{zero}
+\definesfcommand{\ords}{succ}
+\definesfcommand{\ordlim}{lim}
+
+
+%%%
+%%% static and operational semantics
+%%%
+
+\newcommand{\ctortp}[2]{(#1;\; #2)}
+\newcommand{\typej}[3][\Gamma]{#1 \vdash #2 : #3}
+\newcommand{\validj}[2][\Gamma]{#1 \vdash #2}
+\newcommand{\rrto}{\longrightarrow}
+\newcommand{\rrtostar}{\longrightarrow^{*}}
+\newcommand{\conv}{\longleftrightarrow^{*}}
+\newcommand{\convone}{\longleftrightarrow}
+\newcommand{\uform}[4]{#1:^{#2;#3} #4}
+
+%% special forms of reduction
+\newcommand{\rrtocbn}{\rrto_{\mathrm{n}}}
+\newcommand{\rrtocbnnc}{\rrto_{\mathrm{n-nc}}}
+
+%% typing for contexts
+\newcommand{\wfctxtj}[1]{\vdash #1}
+\newcommand{\wfj}[2][\Gamma]{#1\vdash #2}
+
+
+%%%
+%%% helpers for interpretation function
+%%%
+
+%% ordered tuples
+\newcommand{\onetuple}[1]{\langle #1\rangle}
+\newcommand{\pair}[2]{\langle #1 ,\; #2\rangle}
+\newcommand{\triple}[3]{\langle #1 ,\; #2, \; #3\rangle}
+
+%% my own special logical operators, with extra spacing and text where needed
+\newcommand{\mywedge}{\,\wedge\,}
+\newcommand{\myvee}{\,\vee\,}
+\newcommand{\myimplies}{\text{ \textbf{implies} }}
+
+%% set comprehension
+\newcommand{\setcompr}[2]{\{\, #1 \;|\;\; #2 \,\}}
+\newcommand{\setcomprarr}[2]{\{\, #1 \;|\;\; \begin{array}[t]{@{}l@{}} #2 \,\}\end{array}}
+\newcommand{\setcomprlong}[2]{\begin{array}[t]{@{}l@{}}\{\, #1 \\\;\;\;\;|\;\; \begin{array}[t]{@{}l@{}}#2 \,\}\end{array}\end{array}}
+
+%% if-then-else
+\newcommand{\ifthen}[3]{\text{\textbf{if} }#1\text{ \textbf{then} }#2\text{ \textbf{else} }#3}
+\newcommand{\ifthennl}[3]{\text{\textbf{if} }#1\begin{array}[t]{@{}l@{}}\text{ \textbf{then} }#2\\\text{ \textbf{else} }#3\end{array}}
+
+%% primitive recursion
+\newcommand{\primrecname}[1][\dummy]{\mathbf{primrec}^{#1}}
+\newcommand{\primrec}[4][\dummy]{\primrecname[#1]_{#2}\;(#3)\;(#4)}
+\newcommand{\primrecarr}[4][\dummy]{\primrecname[#1]_{#2}\;(#3)\;(\begin{array}[t]{@{}l@{}}#4)\end{array}}
+\newcommand{\primrecnl}[4][\dummy]{\primrecname[#1]_{#2}\;\begin{array}[t]{@{}l@{}}(#3)\\(#4)\end{array}}
+% \newcommand{\primrecname}{\mathbf{primrec}}
+% \newcommand{\primrec}[3]{\primrecname_{#1}\;(#2)\;(#3)}
+
+%% "dummy" definitions
+\newcommand{\lamstar}[3]{\lambda^{\dummy} (#1\in #2) .\; #3}
+\newcommand{\lamstarnot}[2]{\lambda^{\dummy} #1 .\; #2}
+\newcommand{\pistar}[2]{#1 \to^{\dummy} #2}
+\newcommand{\appstar}[2]{#1 \;@^{\dummy}\; #2}
+\newcommand{\ctorstar}[2]{#1^{\dummy}(#2)}
+%\newcommand{\instar}{\in^{\dummy}}
+\newcommand{\Deltadi}[1][i]{\Delta_{\dummy,#1}}
+\newcommand{\sigmadi}[1][i]{\sigma_{\dummy,#1}}
+
+%% forming Deltas and sigmas
+\newcommand{\dxform}[3][x]{#1\mapsto (#2,#3)}
+%\newcommand{\duform}[4][u]{#1:(#2;#3)\mapsto #4}
+\newcommand{\duform}[3][u]{#1\mapsto (#2,#3)}
+\newcommand{\dgform}[3][\Gamma]{#1\mapsto (#2,#3)}
+\newcommand{\dgargform}[3]{#1\mapsto (#2,#3)}
+
+%% well-formedness
+%\newcommand{\wfdsj}[3][\Gamma]{#1 \vdash (#2;#3)}
+%\newcommand{\wfdsjdef}{\wfdsj[\Gamma]{\Delta}{\sigma}}
+\newcommand{\tctypej}[4][\Gamma]{#1 \vdash (#2 ; #3) : #4}
+\newcommand{\tctypejdef}[1][\Gamma']{\tctypej{\Delta}{\sigma}{#1}}
+\newcommand{\typejd}[2]{\typej[\dctxt{\Delta}]{#1}{#2}}
+\newcommand{\typejemp}[2]{\typej[\cdot]{#1}{#2}}
+\newcommand{\typejdg}[2]{\typej[\dctxt{\Delta},\Gamma]{#1}{#2}}
+\newcommand{\validjd}[1]{\validj[\dctxt{\Delta}]{#1}}
+\newcommand{\ivtypej}[3][\Gamma]{#1 \vdash #2 : #3}
+
+%% misc
+\newcommand{\Iarg}{I_{\mathsf{arg}}}
+\newcommand{\size}[1]{\mathbf{size}(#1)}
+\newcommand{\Mfun}{\ensuremath{M_{\mathrm{fun}}}}
+\newcommand{\Afun}{\ensuremath{A_{\mathrm{fun}}}}
+\newcommand{\proji}[1]{\pi_3 (#1)}
+\newcommand{\proj}[2][c]{\mathsf{proj}_{#1,#2}}
+\newcommand{\projvec}[1][c]{\vec{\mathsf{proj}_{#1}}}
+\newcommand{\F}{\ensuremath{\mathfrak{F}}}
+\newcommand{\Fomega}{\ensuremath{\F^{\omega}}}
+\newcommand{\Ii}[1][i]{\ensuremath{\mathbb{I}_{#1}}}
+\newcommand{\Sii}[2][i]{\ensuremath{\mathbb{S}_{#1,#2}}}
+\newcommand{\Ui}[1][i]{\ensuremath{\mathbb{U}_{#1}}}
+%\newcommand{\Ii}[1][i]{\ensuremath{\mathbb{I}_{#1}}}
+%\newcommand{\Iomega}{\Ii[\omega]}
+\newcommand{\liftset}[2]{\ensuremath{\mathcal{U}}_{#1}(#2)}
+\newcommand{\powerset}{\ensuremath{\mathcal{P}}}
+\definesfcommand{\Ctxt}{Ctxt}
+\definesfcommand{\Term}{Term}
+\newcommand{\interphole}[2][I]{\ensuremath{#1[#2]}}
+\newcommand{\ctors}[1]{\mathrm{ctors}_{\Sigma}(#1)}
+\newcommand{\elimok}[2]{\mathbf{elim\text{-}ok}(#1\mapsto #2)}
+\definermcommand{\Dom}{Dom}
+\definermcommand{\Ran}{Ran}
+\newcommand{\countablefun}[2]{#1 \stackrel{\aleph_0}{\to} #2}
+\definermcommand{\TC}{TC}
+\newcommand{\instar}{\in^{*}}
+\definesfcommand{\id}{id}
+
+%% denotations
+\newcommand{\denotationnot}[1]{\lceil #1 \rceil}
+\newcommand{\denotation}[3]{\lceil #3 \rceil_{#1\vdash #2}}
+\newcommand{\denotationd}[1]{\denotation[\dctxt{\Delta}]{#1}}
+%\newcommand{\interpd}[2][\Delta]{\denotationd[\dctxt{#1},#2]{\interp[#1]{#2}}}
+\newcommand{\interpd}[2][\iargs{\Delta}{\Xi}]{\llbrace #2 \rrbrace^{#1}}
+%\newcommand{\interpdS}[2][\Delta]{\llbrace #2 \rrbrace^{#1}_{S}}
+%\newcommand{\interpdI}[2][\Delta]{\llbrace #2 \rrbrace^{#1}_{I}}
+\newcommand{\llbrace}{\{\hspace{-2.5pt}|}
+\newcommand{\rrbrace}{|\hspace{-2.5pt}\}}
+
+%%%
+%%% interpretation and related constructs
+%%%
+
+%\newcommand{\interp}[2][\Delta]{\llbracket #2 \rrbracket^{#1}}
+\newcommand{\iargs}[2]{#1;#2}
+\newcommand{\interp}[2][\iargs{\Delta}{\Xi}]{\llbracket #2 \rrbracket^{#1}}
+\newcommand{\interpnod}[1]{\interp[]{#1}}
+\newcommand{\interpind}[1]{\llbracket #1 \rrbracket_{\mathbf{ind}}}
+%\newcommand{\interpSarg}[3]{\llbracket #3 \rrbracket^{#2}_{#1}}
+%\newcommand{\interpS}[2][\Delta]{\interpSarg{S}{#1}{#2}}
+%\newcommand{\interpI}[2][\Delta]{\interpSarg{I}{#1}{#2}}
+\newcommand{\dummy}{\ensuremath{\bullet}}
+\newcommand{\dctxt}[1]{|#1|}
+\newcommand{\Dsubst}[1][\Xi]{#1^{\sigma}}
+\newcommand{\Dlookup}[2][\Xi]{#1^{\mathrm{I}}(#2)}
+\definesfcommand{\SN}{SN}
+\definesfcommand{\NF}{NF}
+\newcommand{\CRnot}[1]{\ensuremath{\mathbf{CR}(#1)}}
+\newcommand{\CR}[3]{\ensuremath{\mathbf{CR}_{#1\vdash#2}(#3)}}
+\newcommand{\CRone}{\textbf{CR~1}}
+\newcommand{\CRtwo}{\textbf{CR~2}}
+\newcommand{\CRthree}{\textbf{CR~3}}
+\newcommand{\CRfour}{\textbf{CR~4}}
+\newcommand{\CRG}{\textbf{G}}
+\newcommand{\CRT}{\textbf{T}}
+\newcommand{\CRE}{\textbf{E}}
+
+
+%%%
+%%% Conclusion stuff about excluded middle
+%%%
+
+\newcommand{\ZFi}[1][i]{\ensuremath{\text{ZF}_{#1}}}
+\newcommand{\ZFCi}[1][i]{\ensuremath{\text{ZFC}_{#1}}}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "uniform-lr"
+%%% End: 

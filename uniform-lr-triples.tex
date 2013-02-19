@@ -1,0 +1,476 @@
+
+\documentclass[conference]{IEEEtran}
+
+\usepackage[cmex10]{amsmath}
+\usepackage{amssymb}
+\usepackage{stmaryrd}
+\usepackage{proof}
+
+\begin{document}
+
+%%% my commands %%%
+
+\input{definitions.tex}
+
+
+\title{Uniform Logical Relations}
+\author{\IEEEauthorblockN{Edwin Westbrook}
+\IEEEauthorblockA{Department of Computer Science\\
+Rice University\\
+Houston, TX 77005\\
+Email: emw4@rice.edu}}
+
+
+\maketitle
+
+\begin{abstract}
+The abstract goes here.
+\end{abstract}
+
+%\IEEEpeerreviewmaketitle
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+
+Intensional constructive type theory (ICTT), as first introduced by
+Martin-L\"{o}f \cite{martinlof72}, is compelling because
+- it gives a combined programming language / mathematical
+  theory (see e.g.~\cite{nps90})
+- further, computation is defined entirely syntactically; no need
+  to appeal to models or set theory
+- an important consideration for such theories is SN
+  + ensures consistency
+  + proof-checking is decidable
+  + gives a simple model, i.e., the term algebra
+    - easy to construct
+    - foundationally compelling because it does not appeal to set theory
+
+
+Unfortunately, it is not known how to prove SN for more powerful
+extensions of ICTT such as the Calculus of Inductive Constructions
+(CiC), the basis of the Coq theorem prover \cite{coq}.
+- set theoretic models have been given for CiC [FIXME], but these do
+  not imply SN only consistency
+- the problem is higher universes + large / impredicative inductive types
+  + SN for higher universes in predicative theories is well-known [FIXME]
+- for impredicative theories we need logical relations
+  \cite{girard-proofs-types}
+  + types are interpreted as logically defined sets of terms
+  + FIXME
+- logical relations works for theories with large types, such as
+  the Calculus of Constructions \cite{coquand88}; however, it does
+  not work for with higher universes
+  + the problem: it is non-uniform
+  + more specifically, interpreting functions depends on whether the argument
+    type is ``\Type''
+  + with higher universes this depends on evaluation
+FIXME: problem is also that we need quasi-normalization to induct on types
+in order to define their LRs
+
+to solve this problem, we introduce a new approach to LR that is uniform
+- explain it
+- we also show that uniform logical relations can be adapted for non-trivial
+  extensions of CiC, such as CNIC \cite{westbrook09,westbrook-thesis}
+- in order to make our definition inductive, we have to make all proofs
+  be interpreted as a ``dummy'' object $\dummy$
+  + this works because proof objects cannot contribute any ``information''
+    to the interpretation of a type
+  + justifies proof-irrelevance [FIXME]
+
+
+The remainder of this document is organized as follows. Section
+\ref{sec:cic} reviews the syntax and semantics of the Calculus of
+Inductive Constructions (CiC), while Section \ref{sec:cic-sn} shows
+how to prove Strong Normalization for CiC using Uniform Logical
+Relations. Section \ref{sec:cnic} describes the Calculus of Nominal
+Inductive Constructions (CNIC), an extension of CiC with support for
+nominal features and higher-order encodings.  Section
+\ref{sec:cnic-sn} then shows how Uniform Logical Relations can be
+adapted for CNIC. Finally, Section \ref{sec:conclusion} concludes.
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{The Calculus of Inductive Constructions (CiC)}
+\label{sec:cic}
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Strong Normalization for CiC}
+\label{sec:cic-sn}
+
+the basic idea is to have an interpretation operation $\interpnod{\cdot}$
+\begin{itemize}
+\item the logical relation for a type $A$ is given by $\interpnod{A}$
+\item explain the two roles of the dummy object $\dummy$
+  \begin{itemize}
+  \item in order for inductiveness to work, we need a ``dummy'' object as
+    the interpretation of propositions in \Prop\ (otherwise the interp of
+    \Prop\ depends on itself!)
+  \item we also need uninterpreted variables; solves one of the issues
+    in Girard's original proof (see [FIXME]) with empty domain types of pi
+  \item explain $\lamstar{x}{S}{I}$ and $\appstar{F}{I}$
+  \end{itemize}
+\end{itemize}
+
+
+\begin{definition}[Denotation]
+  We define $\denotation{A}{I}$, the \emph{denotation of $I$ at type
+    $A$ and context $\Gamma$}, as follows. If $I=\dummy$ then
+  $\denotation{A}{I}$ is:
+  \[
+  \setcompr{\triple{\Gamma'}{M}{\dummy}}{\typejd{(\Gamma',M)}{A} \mywedge \SN(M)}
+  \]
+  Otherwise, $\denotation{A}{I}=I$.
+\end{definition}
+
+\begin{definition}[Reducibility Candidate]
+  We say that $S$ is a \emph{reducibility candidate for $A$ with respect
+    to $\Gamma$}, written $\CR{A}{S}$, iff $S$ is a set of triples
+  $\triple{\Gamma'}{M}{I}$ such that $\typej{(\Gamma',M)}{A}$ and:
+  \begin{description}
+  \item[\textbf{(CR 1):}] \hspace*{10pt} $\SN(M)$;
+  \item[\textbf{(CR 2):}] \hspace*{10pt} If $M\rrto M'$ then $\pair{\Gamma'}{M'}{I}\in S$; and
+  \item[\textbf{(CR 3):}] \hspace*{10pt} If $M'$ is neutral and if
+    $\triple{\Gamma'}{M''}{I'}\in S$ for all $M''$ such that $M'\rrto M''$, then
+    $\triple{\Gamma'}{M'}{I'}\in S$.
+  \end{description}
+  where the \emph{neutral} terms are those of the form $x$ and $M\;N$.
+\end{definition}
+
+
+\begin{lemma}
+\label{lemma:cr-sn}
+Let $S$ be any set of triples $\triple{\Gamma'}{M}{I}$, and define
+\[
+S' = \setcompr{\pair{\Gamma'}{M}}{\exists I.\triple{\Gamma'}{M}{I}\in S}.
+\]
+Further, let $S$ satisfy $\triple{\Gamma'}{M_1}{I}\in S$ iff
+$\triple{\Gamma'}{M_2}{I}\in S$ whenever $M_1\rrto M_2$ and
+$\pair{\Gamma'}{M_i}\in S'$.  If $S'$ is the set of all
+$\pair{\Gamma'}{M}$ such that $\typej{(\Gamma',M)}{A}$ and $\SN(M)$,
+then $I$ is a reducibility candidate for $A$ with respect to $\Gamma$.
+\end{lemma}
+
+\begin{proof}
+\CRone\ is immediate. \CRtwo\ follows because $M\rrto M'$ for $\SN(M)$
+implies $\SN(M')$. Finally, \CRthree\ follows because, for any $M'$
+(including the neutral $M'$), $\SN(M'')$ for all $M''$ such that $M'\rrto M''$
+implies $\SN(M')$.
+\end{proof}
+
+\begin{corollary}
+$\CR{A}{\denotation{A}{\dummy}}$ for all $\Gamma$ and $A$.
+\end{corollary}
+
+
+explain delta:
+\[
+\Delta ::= \cdot \bor \Delta,x:A \bor \Delta,x:A\mapsto\pair{M}{I}
+\]
+- explain uninterpreted variables
+
+We define $\interp{\cdot}$ in Figure \ref{fig:cic-lr}.
+- we use the notation $\interpd{A}=\denotationd{\interp{A}}$
+
+\begin{figure*}
+\centering
+\begin{math}
+\begin{array}{@{}l@{\hspace{7pt}}c@{\hspace{8pt}}l@{}}
+% sorts
+\interp{s} & = &
+\setcompr{\triple{\Gamma}{A}{I}}{\typejd{(\Gamma,A)}{s} \mywedge
+  \SN(A) \mywedge \CR[\dctxt{\Delta},\Gamma]{A}{\denotation[\dctxt{\Delta},\Gamma]{A}{I}}}\\
+
+% Pi-types
+\interp{\pitype{x}{A}{B}} & = &
+\setcomprlong{\triple{\Gamma}{M}{F}}{
+  \typejd{(\Gamma,M)}{(\pitype{x}{A}{B})} \mywedge\\
+  \forall(\triple{\Gamma'}{N}{I}\in\interpd[\Delta,\Gamma]{A}) .\\
+  \ind{1}\triple{\cdot}{M\;N}{\appstar{F}{\triple{\Gamma'}{N}{I}}} \in\interpd[\Delta,\Gamma,\Gamma',x:A\mapsto \pair{N}{I}]{B}
+}
+\\[30pt]
+
+% inductive types
+\interp{\ctorapp{a^{-1}}{\vec{M}}{\vec{N}}} & = &
+\setcompr{\triple{\Gamma}{M}{\dummy}}{
+  \typejd{(\Gamma,M)}{\ctorapp{a^{-1}}{\vec{M}}{\vec{N}}} \mywedge \SN(M)
+}
+\\
+
+\interp{\ctorapp{a^{i}}{\vec{M}}{\vec{N}}} & = &
+\setcomprlong{\triple{\Gamma}{M}{\pair{c}{\vec{I}}}}{
+  \typejd{(\Gamma,M)}{\ctorapp{a^{i}}{\vec{M}}{\vec{N}}}
+  \mywedge \SN(M) \mywedge 
+  \NF(M)=\ctorapp{c}{\vec{v'}}{\vec{v}} \mywedge\\
+  c : \pigamma{\Gammap}{\pigamma{\Gammaarg}{\ctorapp{a^i}{\Gammap}{\vec{N'}}}} \mywedge
+  \pair{\vec{v}}{\vec{I}}\in \interpd[\Delta,\Gammap\mapsto \interp{\vec{M}}]{\Gammaarg}
+}
+% \interp{\ctorapp{a^{i}}{\vec{M}}{\vec{N}}} & = &
+% \setcomprlong{\pair{M}{\pair{c}{\vec{I}}}}{
+%   \typej{M}{\ctorapp{a^{i}}{\vec{M}}{\vec{N}}} \mywedge \SN(M) \mywedge \NF(M)=\ctorapp{c}{\vec{v'}}{\vec{v}} \mywedge\\
+%   \Sigma(c)=\ctortp{\Gammap}{\pitype{\vec{x}}{\vec{A}}{\ctorapp{a^i}{\Gammap}{\vec{N'}}}} \mywedge\\
+%   \forall i. \pair{v_i}{I_i}\in \interp[\Delta,\Gammap\mapsto \interp{\vec{M}},x_{<i}\mapsto I_{<i};\Gamma,\Gammap,x_{<i}:A_{<i}]{A_i}
+% }
+\\
+& \cup &
+\setcompr{\triple{\Gamma}{M}{\dummy}}{
+  \typejd{(\Gamma,M)}{\ctorapp{a^{i}}{\vec{M}}{\vec{N}}}
+  \mywedge \SN(M) \mywedge 
+  \not\exists c.\NF(M)=\ctorapp{c}{\vec{v'}}{\vec{v}}
+}
+\\[10pt]
+
+% variables
+\interp[\Delta,x:A\mapsto\pair{N}{I},\Delta']{x} & = & I\\
+\interp[\Delta,x:A,\Delta']{x} & = & \dummy
+\\
+
+% applications
+\interp{M\;N} & = & \appstar{\interp{M}}{\triple{\cdot}{N}{\interp{N}}}\\
+
+% lambdas
+\interp{\lamabs{x}{A}{M}} & = &
+\lamstar{\triple{\Gamma}{N}{I}}{\interpd{A}}{\interp[\Delta,\Gamma,x:A\mapsto \pair{N}{I}]{M}}
+\\
+
+% constructors
+\interp{\ctorapp{c^{-1}}{\vec{M}}{\vec{N}}} & = & \dummy\\
+\interp{\ctorapp{c^i}{\vec{M}}{\vec{N}}} & = & \pair{c}{\interp{\vec{N}}}\\
+
+% pm-functions
+\interp{\pmfuni{-1}{x}{\Gammaarg}{\pc{\vec{P}}{\vec{\Gamma}}{\vec{M}}}} & = &
+\dummy
+\\
+
+\interp{\pmfuni{i}{x}{\Gammaarg}{\pc{\vec{P}}{\vec{\Gamma}}{\vec{M}}}} & = &
+\primrec{f}{
+  \begin{array}[t]{@{}l@{}}
+    \lamstar{\vec{p}}{\interp{\Gammaarg}}{
+      \lamstar{\pair{M}{I}}{\interp[\Delta,\Gammaarg\mapsto\vec{p}]{\ctorapp{a}{\vec{N}}{\vec{Q}}}}{\\
+        \ind{1} \mathsf{match}\;\pair{\NF(M)}{I}\;\mathsf{with}\\
+        \ind{2}\ldots |\;
+        \pair{\ctorapp{c_i}{\vec{N}}{\vec{R}}}{\pair{c_i}{\vec{I}}} \to \interp[\Delta,\Gammaarg\mapsto\vec{p},x:A_{\mathsf{fun}}\mapsto f,\Gamma_i\mapsto\pair{\vec{R}}{\vec{I}}]{M_i}
+        \;| \ldots\\
+        \ind{2}|\;\dummy \to \dummy
+      }}
+  \end{array}
+}
+
+\end{array}
+\end{math}
+\caption{Uniform Logical Relations Construction for CiC}
+\label{fig:cic-lr}
+\end{figure*}
+
+
+
+The following lemmas all follow directly by induction:
+
+\begin{lemma}[Weakening]
+\label{lemma:interp-weakening}
+$\interp[\Delta_1,\Delta_2,\Delta_3]{M}=\interp[\Delta_1,\Delta_3]{M}$.
+\end{lemma}
+
+
+\begin{lemma}[Substitution]
+  \label{lemma:interp-subst}
+  $\interp[\Delta,x:A\mapsto\pair{N}{\interp{N}},\Delta']{M}=
+  \interp[\Delta,\Delta']{[N/x]M}$.
+\end{lemma}
+
+
+\begin{lemma}
+  \label{lemma:delta-eq}
+  If $M\conv M'$ then
+  $\interp[\Delta,x\mapsto\pair{M}{I},\Delta']{N}=
+  \interp[\Delta,x\mapsto\pair{M'}{I},\Delta']{N}$.
+\end{lemma}
+
+\begin{lemma}
+  \label{lemma:interp-eq}
+  If $M\conv M'$ then $\interp{M}=\interp{M'}$.
+\end{lemma}
+
+
+\begin{lemma}
+  \label{lemma:sort-subtyping}
+  If $s_1\subtype s_2$ then $\interp{s_1}\subseteq\interp{s_2}$.
+\end{lemma}
+
+\begin{lemma}
+  \label{lemma:subtyping}
+  If $A_1\subtype A_2$ then $\interp{A_1}\subseteq\interp{A_2}$.
+\end{lemma}
+
+
+
+Discussion: show that $\interp[\cdot]{\cdot}$ is well-defined
+\begin{itemize}
+\item by induction first on the inductive types in order, then on the
+  sizes of the interpretations of the inductive types, then on the
+  maximum sort in a term, then on the term being interpreted
+\item interpretations of sorts decrease the maximum sort in a term;
+  for $\Type_i$ we need that $\interp{M}=\interp{\NF(M)}$
+  and values decrease the maximum sort in a term
+\item interpretations of inductive types decrease the size of the
+  inductive type and/or go backwards in the signature
+\item pattern-matches do well-formed primitive recursion
+\end{itemize}
+
+
+
+
+We say that $\Delta$ is well-formed, written $\vdash\Delta$, iff the
+context for $\Delta$ is well-formed, i.e.,
+$\validj[\cdot]{\dctxt{\Delta}}$, and for all decompositions
+$\Delta=\Delta_1,x:A\mapsto\pair{M}{I}$ we have
+$\triple{\cdot}{M}{I}\in\interpd[\Delta_1]{A}$.
+
+
+\begin{lemma}
+  \label{lemma:sorts}
+  If $\typejd{(\Gamma,s_1)}{s_2}$ then
+  $\triple{\Gamma}{s_1}{\interp{s_1}}\in\interp{s_2}$ for all $\Gamma$
+  with $\validjd{\Gamma}$.
+\end{lemma}
+
+\begin{proof}
+  Straightforward, as $\SN(s_1)$ is immediate and
+  $\CR{s_1}{\interp{s_1}}$ by Lemma \ref{lemma:cr-sn}.
+\end{proof}
+
+
+\begin{lemma}
+  \label{lemma:pi}
+  Let $\typejd{A}{s_A}$, $\typejd{B}{s_B}$, and
+  $\typejd{(\pitype{x}{A}{B})}{s}$.  If
+  $\triple{\Gamma}{A}{\interp{A}}\in\interpd{s_A}$ and for all
+  $\triple{\Gamma'}{N}{I}\in\interpd{A}$ we have
+  $\triple{\cdot}{B}{\interp[\Delta,\Gamma,Gamma',x:A\mapsto\pair{N}{I}]{B}}\in\interp[\Delta,x:A\mapsto\pair{N}{I}]{s_B}$,
+  then
+  $\triple{\cdot}{\pitype{x}{A}{B}}{\interp{\pitype{x}{A}{B}}}\in\interp{s}$.
+\end{lemma}
+
+\begin{proof}
+  FIXME HERE
+  The non-trivial part is showing that
+  $\CR{\pitype{x}{A}{B}}{\interpd{\pitype{x}{A}{B}}}$:
+  \begin{description}
+  \item[\textbf{(CR 1):}] \hspace*{10pt} If
+    $\triple{\Gamma}{M}{F}\in\interp{\pitype{x}{A}{B}}$ then we trivially have
+    $\SN(M)$.
+  \item[\textbf{(CR 2):}] \hspace*{10pt} If
+    $\pair{M}{F}\in\interp{\pitype{x}{A}{B}}$ and $M\rrto M'$ then
+    trivially $\SN(M')$. Also, for all $\pair{N}{I}\in\interp{A}$
+    we have $\pair{M\;N}{\appstar{F}{\pair{N}{I}}}\in
+    \interp[\Delta,x:A\mapsto\pair{N}{I}]{B}$ and so by \CRtwo\ for
+    $B$ we have $\pair{M'\;N}{\appstar{F}{\pair{N}{I}}}\in
+    \interp[\Delta,x:A\mapsto\pair{N}{I}]{B}$.
+  \item[\textbf{(CR 3):}] \hspace*{10pt} Let $M$ be neutral and let
+    $\pair{M'}{F}\in\interp{\pitype{x}{A}{B}}$ for all $M'$ such that
+    $M\rrto M'$. Trivially we have that $\SN(M')$ for all $M'$ such
+    that $M\rrto M'$, so $\SN(M)$. If $\interp{A}$ is empty, then this
+    is all we need; otherwise let $\pair{N}{I}\in\interp{A}$. We must
+    now show that $\pair{M\;N}{\appstar{F}{\pair{N}{I}}}\in
+    \interp[\Delta,x:A\mapsto\pair{N}{I}]{B}$. By \CRone\ for
+    $\interp{A}$, we have $\SN(N)$, so we can reason by induction on
+    $\size{N}$. Now consider all terms reacable from $M\;N$ by one
+    step of reduction. Since $M$ is neutral, this includes terms
+    $M'\;N$ such that $M\rrto M'$, which are in
+    $\interp[\Delta,x:A\mapsto\pair{N}{I}]{B}$ by induction, and terms
+    $M\;N'$ such that $N\rrto N'$, which are in
+    $\interp[\Delta,x:A\mapsto\pair{N}{I}]{B}$ by the induction
+    hypothesis.  We then have the desired result by \CRthree\ for
+    $\interp[\Delta,x:A\mapsto\pair{N}{I}]{B}$.
+  \end{description}
+\end{proof}
+
+
+
+\begin{lemma}
+  \label{lemma:ind-types}
+  Let $\typejd{\vec{M},\vec{N}}{\Gammap,\Gammaarg}$ for
+  $a:\pigamma{\Gammap}{\pigamma{\Gammaarg}{s}}$.  If
+  $\pair{\vec{M},\vec{N}}{\interp{\vec{M},\vec{N}}}\in\interp{\Gammap,\Gammaarg}$
+  then
+  $\pair{\ctorapp{a}{\vec{M}}{\vec{N}}}{\interp{\ctorapp{a}{\vec{M}}{\vec{N}}}}\in
+  \interp{s}$.
+\end{lemma}
+
+\begin{proof}
+  Again, the main requirement is showing that
+  $\CR{\ctorapp{a}{\vec{M}}{\vec{N}}}{\interpd{\ctorapp{a}{\vec{M}}{\vec{N}}}}$,
+  which follows directly from Lemma \ref{lemma:cr-sn} for both the
+  impredicative $a^{-1}$ and the predicative $a^i$.
+\end{proof}
+
+
+FIXME HERE
+
+Remaining lemmas:
+\begin{itemize}
+\item Variables
+\item Application
+\item Abstraction
+\item Constructors
+\item Pattern-matching
+\end{itemize}
+
+\begin{theorem}[Reducibility]
+  Let $\typej{M}{A}$ and $\typej{A}{s}$. If
+  $\typej[\cdot]{\vec{N}}{\Gamma}$ and
+  $\pair{\vec{N}}{\vec{I}}\in\interp[\cdot]{\Gamma}$ then
+  $\interp[\Gamma\mapsto\pair{\vec{N}}{\vec{I}}]{A}\in\interp[\Gamma\mapsto\pair{\vec{N}}{\vec{I}}]{s}$ implies
+  $\interp[\Gamma\mapsto\pair{\vec{N}}{\vec{I}}]{M}\in\interp[\Gamma\mapsto\pair{\vec{N}}{\vec{I}}]{A}$.
+\end{theorem}
+
+\begin{corollary}
+If $\typej{M}{A}$ for any $\Gamma$ then $\SN(M)$.
+\end{corollary}
+
+\begin{proof}
+FIXME
+\end{proof}
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{The Calculus of Nominal Inductive Constructions (CNIC)}
+\label{sec:cnic}
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Strong Normalization for CNIC}
+\label{sec:cnic-sn}
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+\label{sec:conclusion}
+
+The conclusion goes here.
+
+
+
+% bibliography
+\bibliographystyle{IEEEtran}
+\bibliography{bib}
+
+% that's all folks
+\end{document}

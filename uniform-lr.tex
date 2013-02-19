@@ -1,0 +1,2470 @@
+
+%% define an if for whether we are compiling as a tech-report
+\newif\iftechreport
+\techreportfalse
+%\techreporttrue
+
+%%% define the document class / layout for the tech report version... %%%
+\iftechreport
+\setlength{\itemsep}{0pt}
+\documentclass{article}
+
+%% margins
+\setlength{\oddsidemargin}{0in}
+\setlength{\textwidth}{6.5in}
+
+%% paragraph layout
+% \setlength{\parindent}{0pt}
+% \addtolength{\parskip}{\baselineskip}
+
+%% set list spacing parameters
+\usepackage{tweaklist}
+\renewcommand{\descripthook}{\setlength{\topsep}{10pt}%
+  \setlength{\itemsep}{0pt}\setlength{\labelsep}{0pt}}
+
+%%% and the non-tech-report version %%%
+\else
+\documentclass[conference,compsoc]{IEEEtran}
+%\documentclass[a4paper,USenglish]{lipics}
+\fi
+
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{stmaryrd}
+\usepackage{proof}
+
+\begin{document}
+
+%%% my commands %%%
+
+\input{definitions.tex}
+
+
+\title{Uniform Logical Relations}
+
+\iftechreport
+\author{Edwin Westbrook\\
+Department of Computer Science\\
+Rice University\\
+Houston, TX 77005\\
+Email: \texttt{emw4@rice.edu}}
+
+\else
+% \author[1]{Edwin Westbrook}
+% \affil[1]{Department of Computer Science\\
+% Rice University\\
+% Houston, TX 77005\\
+% Email: \texttt{emw4@rice.edu}}
+\author{\IEEEauthorblockN{Edwin Westbrook}
+\IEEEauthorblockA{Department of Computer Science\\
+Rice University\\
+Houston, TX 77005\\
+Email: emw4@rice.edu}}
+\fi
+
+\maketitle
+
+\begin{abstract}
+  Strong Normalization (SN) is an important property for intensional
+  constructive type theories such as the Calculus of Inductive
+  Constructions (CiC), the basis for the Coq theorem prover. Not only
+  does SN imply consistency, but it also ensures that type-checking is
+  decidable, and further, it provides a straightforward model, the
+  term model, for a theory. Unfortunately, although SN has been proved
+  for fragments of CiC, it is not known how to prove SN for CiC in its
+  entirety, including eliminations for large inductive types as well
+  as higher predicative universes. In this work, we show how to prove
+  SN for full CiC. They key insight given here is that terms must be
+  interpreted in a \emph{uniform} manner, meaning that the form of the
+  interpretation of a term must not depend on whether the term is a
+  type. We introduce a new technique called Uniform Logical Relations,
+  With uniformity as a guiding principle, and we show that this
+  technique can then be used to prove SN for CiC. An important
+  property of our technique is that it does not rely on Confluence,
+  and thus it could potentially be used for extensions of CiC with
+  added computation rules, such as Extensionality, for which
+  Confluence relies on SN.
+\end{abstract}
+
+%\IEEEpeerreviewmaketitle
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Introduction}
+
+Intensional constructive type theory (ICTT), as first introduced by
+Martin-L\"{o}f \cite{martinlof72}, is compelling because it gives a
+combined programming language and mathematical theory. This allows
+users to write programs and proofs about those programs in the same
+language (see e.g.~\cite{nps90}). Further, theories based on ICTT are
+defined entirely syntactically. This makes them foundational, in the
+sense that they can be defined with little or no appeal to models
+or set theory.
+
+An important consideration for such theories is Strong Normalization
+(SN), which states that no well-typed term of the theory has an
+infinite reduction path. Stated differently, SN says that the programs
+of a theory have no infinite loops. SN is useful for a number of
+reasons. First, it ensures the consistency of a theory, as it implies
+that every proof has a cut-free version. Second, it ensures that
+type-checking is decidable. Finally, SN also gives a simple model of
+the theory, namely, the normal forms of that theory.
+
+Unfortunately, it is not known how to prove SN for more powerful
+extensions of ICTT such as the Calculus of Inductive Constructions
+(CiC), the basis of the Coq theorem prover \cite{coq}. Although there
+have been numerous proofs of SN for fragments of CiC
+\cite{geuvers94,goguen94,altenkirch93,geuvers91,luo90,coquand90}, none
+of these approaches has been generalized to the entirety of CiC. This
+has lead to research into other approaches to proving the consistency
+of CiC by providing set-theoretic models
+\cite{barras10,werner08,miquel02,miquel00,werner97,stefanova96}.
+The key difficulty is in combining two features: an impredicative
+universe $\Prop$, and a cumulative type hierarchy of universes
+$\Type_i$ for $i\geq 0$.  To handle impredicativity requires the
+Logical Relations technique introduced by Girard for System F
+\cite{girard-proofs-types}, in which each type is interpreted as a
+logically defined set of terms, also called a logical relation.  With
+a cumulative type hierarchy, however, we do not know whether a type is
+a sort or not unless we normalize it, and thus, under the standard
+approach to Logical Relations, it is unknown how to even interpret a
+type without normalizing it. This seems to require SN to prove SN! The
+problem is especially difficult in the presence of inductive types (as
+pointed out by e.g.~\cite{geuvers94}), since the form of a type can
+depend on whether a natural number term evaluates to 0 or to
+1. Although Luo showed how to break this cycle in the case of ECC
+using a difficult and complex quasi-normalization theorem
+\cite{luo90}, ECC contains only products, not inductive types, and it
+is not clear that this approach generalizes to theories that do
+contain inductive types.
+
+
+In this paper, we show how to solve this problem by using an
+interpretation that is \emph{uniform}, meaning that the interpretation
+does not need to know whether a type is a sort.\footnote{This approach
+  came out of the author's dissertation, which gave an interpretation
+  of a nominal extension of CiC into CiC \cite{westbrook-thesis}; the
+  interpretation for CiC in set theory given here is actually much
+  simpler because we do not have to worry things like intensional
+  equality and type universes in set theory.}  We call this approach
+Uniform Logical Relations.  The key technical development that ensures
+uniformity is to interpret types as sets of triples of context, terms, and
+interpretations, i.e., sets of the form
+$\setcompr{\triple{\Gamma}{M}{I}}{\phi(\Gamma,M,I)}$ where $M$ is a term
+that is well-typed with respect to $\Gamma$,
+and $\phi$ is
+a logical formula which states that $I$ is a valid interpretation of
+$M$. This is as opposed to the usual approach of interpreting types as
+sets of terms $\setcompr{M}{\phi(M)}$.
+% (Technically, both our
+% approach and many prior approach consider not just terms but ``terms
+% in context''; i.e., each term in a set is also bundled with a context
+% $\Gamma$ relative to which it is well-typed.)
+Under
+the usual approach, the interpretation of the function type
+$\pitype{x}{A}{B}$ depends on the form of $A$: this interpretation
+must quantify over terms of type $A$ and
+reducibility candidates when $A$ is a sort; over terms of type $A$ and
+functions on reducibility candidates when $A$ is a kind-level
+$\Pi$-type; and over just terms of type $A$ when $A$ is a type.  This
+information about $A$ requires the normal form of $A$ in general.
+Under Uniform Logical Relations, in contrast, the interpretation of
+$\pitype{x}{A}{B}$ always quantifies over triples
+$\triple{\Gamma}{N}{X}\in\interpnod{A}$. This uniformity means we do not require
+the normal form of $A$.
+
+
+From a different viewpoint, uniformity means the interpretation
+captures ``deep'' information about every term in the theory, instead
+of just the types. For example, the interpretation of a constructor
+application such as $c\;M_1\;M_2$ is the tuple $\triple{c}{I_1}{I_2}$,
+where each $I_i$ is the interpretation of $M_i$. Intuitively, this
+deep information is needed because even ``simple'' objects, like
+natural numbers, can influence the interpretation of a type built
+using elimination forms, such as the type
+\[
+\caseof{x}{\pcnoctxt{\z}{\nat} \;|\; \pcnoctxt{\s\;y}{\nat\to\nat}}
+\]
+
+A central concern with deep interpretations inside ZF set theory is
+the Axiom of Regularity, which states that the set membership relation
+$\in$ is well-founded. On the positive side, Regularity immediately
+justifies primitive recursion on inductive types, because recursive
+calls in CiC are guaranteed to follow the transitive closure of the
+$\in$ relation.  More subtly, Regularity explains why Uniform Logical
+Relations does not work for potentially non-terminating terms like
+$\lamabsnot{x}{x\;x}$, where a term is applied to itself, since no
+function can be in its own domain or range without creating a cycle in
+the $\in$ relation.
+
+
+On the negative side, however, Regularity makes it difficult to
+interpret proofs because of impredicativity, as proofs can quantify
+over domains that contain themselves. To break the ``vicious cycle''
+of impredicativity, all proofs are given a ``dummy'' interpretation,
+written $\dummy$, which intuitively contains no information.  (The
+empty set $\emptyset$ could be used here, but we use a separate
+notation $\dummy$ for clarity.)  This works because it is not possible
+in CiC to perform eliminations of proofs except when either the input
+type intuitively contains no information, like the empty type
+$\False$, or the output is another proof, whose interpretation
+is also a dummy and does not need any information from the input.
+This technique also means that Uniform Logical Relations construction
+satisfies the Proof Irrelevance property (see, e.g., \cite{miquel02}),
+since all proofs have the same interpretation.
+
+
+The remainder of this document is organized as follows. Section
+\ref{sec:cic} reviews the syntax and semantics of the Calculus of
+Inductive Constructions (CiC).  Section \ref{sec:cic-sn} then proves
+Strong Normalization for CiC using Uniform Logical Relations.
+% \footnote{Although it is widely believed that CiC has
+%   equivalent proof-theoretic strength as ZF with inaccessible
+%   cardinals, and thus that a proof of SN inside ZF would violate
+%   G\"{o}del's Second Incompleteness theorem, this is in fact only true
+%   for \emph{constructive} ZF; we discuss this more in Section
+%   \ref{sec:conclusion}.}
+% Section \ref{sec:cnic} describes the Calculus of Nominal
+% Inductive Constructions (CNIC), an extension of CiC with support for
+% nominal features and higher-order encodings.  Section
+% \ref{sec:cnic-sn} then shows how Uniform Logical Relations can be
+% adapted for CNIC.
+Finally, Section \ref{sec:related-work} relates Uniform Logical
+Relations to previous approaches, and Section \ref{sec:conclusion}
+concludes.
+% FIXME: cite tech report...?
+% \iftechreport\else
+% Proofs of most theorems are omitted for space reasons, but can be
+% found in the companion technical report \cite{westbrook-techreport}.
+% \fi
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{The Calculus of Inductive Constructions}
+\label{sec:cic}
+
+In this section, we give a brief overview of the Calculus of Inductive
+Constructions. The version we give here has some small modifications
+relative to the theory as presented in, for example, the Coq manual
+\cite{coq}. These modifications are for increased conciseness, but do
+not change the theory in a material way.
+
+\textbf{A Note on Syntax:} Here and in the below we use particular
+letters to stand for elements of particular syntactic classes; e.g.,
+$M$ is always used for a term. These can appear with subscripts or
+primes, as in $M_2'$ or $\Mfun$. We also use an arrow over a syntactic
+construct to indicate a sequence of zero or more of those constructs.
+For example, $\vec{x}$ denotes a sequence of variables. We use
+subscripts $i$ and $j$ to denote the $i$th and $j$th elements of this
+sequence, e.g., $x_i$, and we use vertical bars $|\vec{x}|$ to denote
+the length of this sequence. If the letter under the arrow has a
+prime, then so do the elements of the sequence, so for instance the
+elements of $\vec{M'}$ are referred to as $M'_i$.  We also use the
+following compound notations: $M\;\vec{M}$ denotes the multi-arity
+application $M\;M_1\ldots M_{|\vec{M}|}$; $[\vec{M}/\Gamma]$ denotes
+the multi-arity substitution
+$[M_1/x_1,\ldots,M_{|\vec{M}|}/x_{|\vec{M}|}]$, where $\vec{x}$ are
+the variables on the left in $\Gamma$; and
+$\pc{\vec{c}}{\vec{\Gamma}}{\vec{M}}$ denotes the sequence of pattern
+cases $\pc{c_1}{\Gamma_1}{M_1}\;|\ldots|\;\pc{c_1}{\Gamma_1}{M_1}$
+
+We assume mutually disjoint sets of constructors $c$, type
+constructors $a$, variables $x$, and recursive variables $u$, where
+the latter are used for recursive calls in primitive recursive
+pattern-matching functions and the sets of variables and recursive
+variables are infinite. We also use $y$ and $z$ for variables.
+
+Figure \ref{fig:syntax} gives the syntax of CiC. The signatures
+$\Sigma$ associate types with constructors $c$ and type constructors
+$a$, while the contexts $\Gamma$ map variables $x$ and recursive
+variables $u$ to types. We also use $\Delta$ for contexts below.
+Recursive variables $u$ are also associated
+with a number $n$ and a sequence of variables $\vec{x}$, which specify
+that all occurrences of $u$ should have the form $u\;\vec{M}\;x_i$ for
+some $i$ where $|\vec{M}|=n$, to ensure termination of primitive
+recursion. In the below we write $|\Gamma|$ for the length of
+$\Gamma$, i.e., the number of commas.
+
+
+%%% syntax figure %%%
+\begin{figure}
+\centering
+\iftechreport\else\begin{small}\fi
+\begin{math}
+\begin{array}{@{}lrl@{}}
+\Sigma & ::= & \cdot \bor \Sigma,c:M \bor \Sigma,a:M\\
+\Gamma & ::= & \cdot \bor \Gamma,\gxform{M} \bor \Gamma,\guform{n}{\vec{x}}{M}\\
+M & ::= & \Prop \bor \Type_i \bor \pitype{x}{M}{M}
+\bor \ctorapp{a}{\vec{M}}{\vec{M}}\\
+& \borstar & x \bor M\;M \bor \lamabs{x}{M}{M} \bor \ctorapp{c}{\vec{M}}{\vec{M}}\\
+& \borstar & u \bor \pmfun[ip]{u}{\Gamma}{\pc{c}{\Gamma}{M}\;|\;\ldots\;|\;\pc{c}{\Gamma}{M}}
+\end{array}
+\end{math}
+\iftechreport\else\end{small}\fi
+\caption{Syntax of CiC}
+\label{fig:syntax}
+\end{figure}
+
+
+The remainder of Figure \ref{fig:syntax} defines the terms $M$.  We
+also use $N$, $Q$, and $R$ for terms, as well as $A$ and $B$ for terms
+that are meant to denote types.  The terms include the impredicative
+universe $\Prop$ and the predicative universes $\Type_i$ for all
+$i\geq 0$. These are the \emph{sorts}, written $s$.  We also sometimes
+use $ip$ for meta-variable that varies over $\{\pred,\impred\}$.  In
+addition, $\Type_{-1}$ is also used to denote $\Prop$.  Terms also
+include the function types $\pitype{x}{A}{B}$ and the inductive types
+$\ctorapp{a}{\vec{M}}{\vec{N}}$, where the latter distinguishes
+between the \emph{parameters} $\vec{M}$ and the \emph{arguments}
+$\vec{N}$. Next are the variables $x$, the applications $M\;N$, the
+$\lambda$-abstractions $\lamabs{x}{A}{M}$, and the constructor
+applications $\ctorapp{c}{\vec{M}}{\vec{N}}$, which again
+distinguish between parameters and arguments.
+
+The final line lists the recursive variables $u$ and the
+pattern-matching functions, where the latter have the form
+$\pmfun[ip]{u}{\Gammaarg}{\pc{\vec{c}}{\vec{\Gamma}}{\vec{M}}}$.
+Pattern-matching functions combine the \texttt{Fix} and \texttt{case}
+terms of Coq. Each compound form $\pc{c_i}{\Gamma_i}{M_i}$ is called a
+\emph{pattern case} with \emph{pattern context} $\Gamma_i$ and
+\emph{body} $M_i$.  Pattern-matching functions of this form take in
+$|\Gammaarg|+1$ arguments and pattern-match on the last argument. The
+last argument is called the \emph{scrutinee} and the earlier arguments
+are called the \emph{parameters}. If the scrutinee has the form
+$\ctorapp{c_i}{\vec{N}}{\vec{Q}}$ then the pattern-matching function
+returns $M_i$, substituting the parameters for the variables of
+$\Gammaarg$ and substituting the arguments $\vec{Q}$ for the pattern
+variables listed in $\Gamma_i$. Pattern-matching functions are also
+annotated with either $\pred$ or $\impred$, indicating whether they
+eliminate a predicative or impredicative inductive type.
+
+
+The operational semantics of CiC is given as a higher-order rewrite
+system $\rrto$ in Figure \ref{fig:opsem}. This means that $M_1\rrto
+M_2$ iff $M_2$ can be obtained by replacing a subterm of $M_1$ that
+matches the left-hand side of a rule listed in Figure \ref{fig:opsem}
+be the corresponding right-hand side of the rule.  The first rule
+performs the usual $\beta$-reduction, while the second performs the
+pattern-matching reduction described in the previous paragraph.  In
+the below, we write $\rrtostar$ and $\conv$ respectively
+for the reflexive-transitive closure
+and the reflexive-symmetric-transitive closure of $\rrto$.
+
+
+%%% Operational Semantics %%%
+\begin{figure}
+\centering
+\iftechreport\else\begin{small}\fi
+\begin{math}
+\begin{array}{@{}rcl@{}}
+
+\hspace{20pt}(\lamabs{x}{A}{M})\;N & \rrto & [N/x]M
+\\[5pt]
+
+\multicolumn{3}{l}{
+  (\Mfun=\pmfun{u}{\Gammaarg}{\pc{\vec{c}}{\vec{\Gamma}}{\vec{M}}})\;
+           \vec{N}\;\ctorapp{c_i}{\vec{Q}}{\vec{R}}
+%\hspace{47pt}
+} \\
+& \rrto & 
+  [\vec{N}/\Gammaarg,\vec{R}/\Gamma_i,\Mfun/u]M_i
+\end{array}
+\end{math}
+\iftechreport\else\end{small}\fi
+\caption{Operational Semantics of CiC}
+\label{fig:opsem}
+\end{figure}
+
+
+% \begin{lemma}[Confluence]
+%   \label{lemma:confluence}
+%   If $M\conv N$ then there exists $Q$ such that $M\rrtostar Q$ and
+%   $N\rrtostar Q$.
+% \end{lemma}
+
+% \begin{myproof}
+%   The relation $\rrto$ is defined by an orthogonal, higher-order
+%   rewrite system and so is confluent by known techniques (see, e.g.,
+%   \cite{baader-nipkow98}).
+% \end{myproof}
+
+
+\iftechreport\else
+In the below we also make use of call-by-name (CBN) reduction.
+Intuitively, $M$ CBN reduces to $N$, written $M\rrtocbn N$, iff $N$
+can be reached from $M$ by only reducing a redex that is either to the
+left of zero or more applications in $M$ or is in the scrutinee of a
+pattern-matching function at the top level of $M$.  When $M\rrtocbn
+M'$ holds by contracting a redex $R$ in $M$, we call the immediate
+subterms of $R$ the \emph{constituents} of the reduction, and we
+further say that $M$ call-by-name reduces to $M'$ \emph{with
+  normalizing constituents}, written $M\rrtocbnnc M'$, if all these
+constituents are strongly normalizing. If there is no $M'$ such that
+$M\rrtocbn M'$ then $M$ is called a \emph{weak head normal form}
+(WHNF).  These notions will be useful in Section \ref{subsec:interp}
+below.
+\fi
+
+
+
+We do not give the well-formedness rules for signatures $\Sigma$;
+these may be found in the Coq manual \cite{coq}. At a high level,
+however, these require that $\Sigma$ contain sequences that define a
+type constructor $a$ and its constructors $c_i$ of the following form:
+\[
+a:(\pigamma{\Gammap}{\pigamma{\Gammaa}{s}}),
+c_1:(\pigamma{\Gammap}{\pigamma{\Gammaci[1]}{\ctorapp{a}{\Gammap}{\vec{M_c}}}}),
+\ldots
+\]
+The context $\Gammap$ lists the \emph{parameters} of the inductive
+type $a$, which must be the same for for all of the constructors.  The
+contexts $\Gammaa$ and $\Gammaci[i]$ list the \emph{arguments} of $a$
+and $c_i$, respectively. All of the types must be well-typed for the
+prefix of $\Sigma$ before $a$, except that the $\Gammaci[i]$ may
+contain $a$ \emph{strictly positively}, meaning that types of the form
+$\ctorapp{a}{\vec{N}}{\vec{Q}}$ can only occur as the return type
+of zero or more $\Pi$-abstractions directly to the right
+of a colon in $\Gammaci[i]$. The signature $\Sigma$ and its
+well-formedness are left implicit in the below.
+We also implicitly assume that any contexts $\Gamma$ are well-formed,
+meaning that all listed types are well-typed.
+
+% Well-formedness for contexts is given by the judgment $\wfctxtj{\Gamma}$,
+% defined as follows:\\
+% \[
+% \figfill
+% \infer{\wfctxtj{\cdot}}{}
+% \figfill
+% \infer{\wfctxtj{\Gamma,\gxform{A}}}{\wfctxtj{\Gamma} & \typej{A}{s}}
+% \figfill
+% \infer{\wfctxtj{\Gamma,\guform{n}{\vec{x}}{A}}}{\wfctxtj{\Gamma} & \typej{A}{s}}
+% \figfill
+% \hspace{30pt}
+% \]
+% These rules require that each type $A$ listed in $\Gamma$ is
+% well-typed at some sort $s$ in the prefix of $\Gamma$ before $A$.  We
+% implicitly assume well-formedness of all contexts used in the typing
+% rules below.
+
+
+The typing rules are given in Figure \ref{fig:typing}. The first rule
+is the conversion rule, which states that equal types have the same
+elements. Note that this only allows a single step of conversion;
+although the rule may be used multiple times, each use requires the
+destination type $A'$ to be well-typed, ensuring that only conversions
+that use well-typed types can be used.  The second rule is the
+subtyping rule, which states that if $M$ has type $A$ for $A$ a
+\emph{subtype} of $A'$, written $A\subtype A'$, then $M$ has type
+$A'$.  Subtyping is the reflexive-transitive closure of the following
+three cases: $\Prop\subtype\Type_0$; $\Type_i\subtype\Type_{i+1}$; and
+if $B_1\subtype B_2$ then
+$\pitype{x}{A}{B_1}\subtype\pitype{x}{A}{B_2}$.  Note that subtyping
+is guaranteed to preserve well-typedness of types.  The next two rules
+state that $\Prop:\Type_0$ and $\Type_i:\Type_{i+1}$. The next two
+rules type $\Pi$-types $\pitype{x}{A}{B}$ by requiring the types of
+both $A$ and $B$ to be sorts. Also, if $B$ is impredicative, meaning
+it has type $\Prop$, then the type of $\pitype{x}{A}{B}$ is $\Prop$,
+and otherwise the type of $\pitype{x}{A}{B}$ is the maximum universe
+of that of both $A$ and $B$.
+
+
+%%% Typing %%%
+\begin{figure*}
+\centering
+\iftechreport\else\begin{footnotesize}\fi
+\begin{tabular}{@{\hspace{-0pt}}c@{\hspace{-0pt}}}
+
+\infer{\typej{M}{A'}}{\typej{M}{A} & A\conv A' & \typej{A'}{s}}
+\figfill
+
+\infer{\typej{M}{A'}}{\typej{M}{A} & A\subtype A'}
+\figfill
+
+\infer{\typej{\Prop}{\Type_0}}{}
+\figfill
+
+\infer{\typej{\Type_i}{\Type_{i+1}}}{}
+\\ \\
+
+\infer{\typej{\pitype{x}{A}{B}}{\Type_i}}{\typej{A}{\Type_i} & \typej[\Gamma,x:A]{B}{\Type_i}}
+\figfill
+
+\infer{\typej{\pitype{x}{A}{B}}{\Prop}}{\typej{A}{s} & \typej[\Gamma,x:A]{B}{\Prop}}
+
+\figfill
+\infer{\typej{\lamabs{x}{A}{M}}{\pitype{x}{A}{B}}}{\typej{A}{s} & \typej[\Gamma,x:A]{M}{B}}
+\figfill
+
+\infer{\typej{x}{A}}{x:A\in\Gamma}
+\\ \\
+
+\infer{\typej{M\;N}{[N/x]B}}{\typej{M}{\pitype{x}{A}{B}} & \typej{N}{A}}
+\figfill
+
+\infer{\typej{\ctorapp{a}{\vec{M}}{\vec{N}}}{s}}{
+  a:\pigamma{\Gammap}{\pigamma{\Gammaa}{s}}\in\Sigma
+  & \typej{(\vec{M};\vec{N})}{\Gammap;\Gammaa}
+}
+\\ \\
+
+\infer{
+  \typej{\ctorapp{c}{\vec{M}}{\vec{N}}}{\ctorapp{a}{\vec{M}}{[\vec{M}/\Gammap,\vec{N}/\Gammac]\vec{Q}}}
+}{
+  c:\pigamma{\Gammap}{\pigamma{\Gammac}{\ctorapp{a}{\Gammap}{\vec{Q}}}} \in\Sigma
+  &
+  \typej{(\vec{M};\vec{N})}{\Gammap;\Gammac}
+}
+\figfill[4pt]
+
+\infer{\typej{u\;\vec{M}\;(x_i\;\vec{N})}{[(\vec{M},(x_i\;\vec{N}))/\Gamma_u]B}}{
+  (\guform{|\vec{M}|}{\vec{x}}{\pigamma{\Gamma_u}{B}})\in\Gamma &
+  \typej{(\vec{M},(x_i\;\vec{N}))}{\Gamma_u}
+}
+\\ \\
+
+\infer{
+  \typej{
+    \pmfun[ip]{u}{\Gammaarg}{\pc{\vec{c}}{\vec{\Gamma}}{\vec{M}}}
+  }{
+    (\Afun = \pigamma{\Gammaarg}{\pitype{x}{\ctorapp{a}{\vec{N}}{\vec{Q}}}{B}})
+  }
+}{
+  \begin{array}{@{}c@{}}
+    \typej{\Afun}{s}
+    \figfill
+    a:\pigamma{\Gammap}{\pigamma{\Gammaa}{s_a^{ip}}}\in\Sigma
+    \figfill
+    \elimok{a}{s}
+    \figfill
+    \vec{c} = \ctors{a}
+    \figfill
+    \forall i. (\wfj[\Gamma,\Gammaarg]{\Gamma_i})
+    \\
+    \forall i. (\typej[\Gamma,\Gammaarg,\Gamma_i]{\ctorapp{c_i}{\vec{N}}{\Gamma_i}}{\ctorapp{a}{\vec{N}}{\vec{Q}}})
+    \figfill
+    \forall i. (\typej[\Gamma,\Gammaarg,\Gamma_i,\guform{|\Gammaarg|}{\Gamma_i}{}]{M_i}{[\ctorapp{c_i}{\vec{N}}{\Gamma_i}/x]B})
+  \end{array}
+}
+\end{tabular}
+\iftechreport\else\end{footnotesize}\fi
+\caption{Typing Rules of CiC}
+\label{fig:typing}
+\end{figure*}
+
+
+
+For inductive types $\ctorapp{a}{\vec{M}}{\vec{N}}$, the parameters
+$\vec{M}$ and the arguments $\vec{N}$ must have the types given by the
+contexts $\Gammap$ and $\Gammaa$ in $\Sigma$.  This is stated with the
+judgment $\typej{(\vec{M};\vec{N})}{\Gammap;\Gammaa}$ which states
+that $|\vec{M}|=|\Gammap|$, $|\vec{N}|=|\Gammaa|$, and that, for each
+term $Q$ in $\vec{M},\vec{N}$ with type $A$ occurring at the same
+position in $\Gammap,\Gammaa$, we have
+$\typej{Q}{[\vec{M}/\Gammap,\vec{N}/\Gammaa]A}$.
+
+For variables, we look the type up in the context. For applications
+$M\;N$, we require $M$ to have function type $\pitype{x}{A}{B}$ and
+$N$ to have type $A$, returning type $[N/x]B$. For
+$\lambda$-abstractions, we require the domain type $A$ to be
+well-formed, the body $M$ to have type $B$ under the context extended
+with variable $x$, and we return function type $\pitype{x}{A}{B}$.
+For constructor applications $\ctorapp{c}{\vec{M}}{\vec{N}}$, we again
+require the parameters $\vec{M}$ and arguments $\vec{N}$ to have the
+appropriate types given in $\Gammap$ and $\Gammac$, yielding the
+return type of $c$ with the parameters and arguments substituted in.
+For recursive calls to $u$, we require the term to be of the form
+$u\;\vec{M}\;x_i$ where $x_i$ is one of the variables to which $u$ may
+be applied, where $|\vec{M}|$ is the number of arguments before $x_i$
+to which $u$ must be applied, and where all of $\vec{M}$ and $x_i$
+have the types required by the type of $u$.
+
+
+To type a pattern-matching function, we first require that its type
+$\Afun$ (which includes the parameter types $\Gammaarg$) has type $s$
+for some $s$. We then require that $a$ can be eliminated at sort
+$s$, written $\elimok{a}{s}$; this states that, if $a$ is
+impredicative then $s=\Prop$, except for the special case that $a$ has
+at most one constructor, all of whose arguments are proofs (i.e., have
+a type which has type $\Prop$), when $s$ is allowed to be
+predicative. Next, we require that the patterns exactly match
+the constructors of $a$ in $\Sigma$, written
+$\ctors{a}$. Next, we require that the pattern contexts $\Gamma_i$ are
+all well-formed. Finally, we require that each $c_i$ applied to the
+given parameters and the variables listed in $\Gamma_i$ has same type
+as the input type, and that each body $M_i$ has as its type the result
+of substituting this application of $c_i$ into the return type $B$.
+
+
+\begin{lemma}
+  \label{lemma:type-typing}
+  If $\typej{M}{A}$ then $\exists s.\typej{A}{s}$.
+\end{lemma}
+
+\iftechreport
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Sub-Section %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Call-by-Name Reduction}
+\label{subsec:cbn}
+
+In order to prove reducibility of $\lamabs{x}{A}{M}$ below, we will
+need to prove that $(\lamabs{x}{A}{M})\;N$ is reducible for all
+reducible $N$.  Since reducibility is proved by induction on the
+structure of terms, we get by assumption that $[N/x]M$ is reducible;
+to proceed, we need to ``undo'' a step of reduction.\footnote{This
+  ``undoing'' is used in a similar manner as the condition \CRthree\
+  in Girard's original proof \cite{girard-proofs-types}, and also has
+  a counterpart in approaches based on saturated sets, such as that of
+  Altenkirch \cite{altenkirch93}.} For pattern-matching functions,
+however, the situation is more complex: if $\Mfun$ is a
+pattern-matching function with cases $M_i$, and if we have by the
+inductive hypothesis that $[\vec{N}/\Gammaarg,\vec{Q}/\Gamma_i]M_i$ is
+reducible for all reducible $\vec{N}$ and $\vec{Q}$, then undoing a
+step of reduction only yields that $\Mfun\;\vec{N}\;N$ is reducible
+for $N$ of the form $\ctorapp{c}{\vec{R}}{\vec{Q}}$.  In other words,
+we might need to undo multiple reductions on the scrutinee argument
+$N$. We only need to undo reductions on the path to a weak head normal
+form of $N$, however. Call-by-name (CBN) reduction gives a disciplined
+way to talk about exactly these sorts of reductions.
+
+
+In the remainder of this section, we introduce CBN reduction and
+prove some properties of CBN that will be used below.  More
+specifically, we deal with the reduction relation $\rrtocbnnc$ which
+only performs CBN reductions when the immediate subterms of the redex
+involved are all strongly normalizing; otherwise we could have
+$M\rrtocbn N$ via a redex that ``throws away'' a subterm of $M$, so
+$\SN(N)$ does not imply $\SN(M)$.  We then prove that undoing
+$\rrtocbnnc$ preserves SN (Lemma \ref{lemma:cbn-nc-whnf}), and also
+that $\rrtocbnnc$ satisfies a weak Standardization property for
+reduction to weak head normal forms (Lemma \ref{lemma:cbn-nc-whnf}).
+These both follow from Lemma \ref{lemma:cbn-diamond}, which shows that
+$\rrtocbnnc$ weakly commutes with standard reduction. Note that none
+of this material should be considered surprising or novel; Lemma
+\ref{lemma:cbn-diamond}, for example, is proved as Lemma 3.5.2 by
+Altenkirch \cite{altenkirch93}, where CBN reduction is called weak
+head reduction.
+
+
+%% CBN reduction
+\begin{definition}[CBN Reduction]
+  \label{def:cbn}
+  We say that $M$ \emph{call-by-name (CBN) reduces} to $M'$, written
+  $M\rrtocbn M'$, iff the following hold:
+  \begin{enumerate}
+  \item If $M$ is a redex, then $M'$ is the result of contracting $M$;
+  \item If $M\equiv\Mfun\;\vec{N}\;N$ such that $M$ is not a redex and
+    $\Mfun$ is a pattern-matching function with $|\vec{N}|$
+    parameters, and if $N\rrtocbn N'$, then
+    $M'\equiv\Mfun\;\vec{N}\;N'$; and
+  \item If $M\equiv M_1\;M_2$ for $M$ not of one of the above forms,
+    and if $M_1\rrtocbn M_1'$, then $M'\equiv M_1'\;M_2$.
+  \end{enumerate}
+  If none of these apply, then there is no $M'$ such that
+  $M\rrtocbn M'$, and $M$ is called a \emph{weak head normal form}
+  (WHNF). When $M\rrtocbn M'$ holds, by contracting a redex $R$ in
+  $M$, we call the immediate subterms of $R$ the \emph{constituents}
+  of the reduction, and we further say that $M$ call-by-name reduces
+  to $M'$ \emph{with normalizing constituents}, written $M\rrtocbnnc
+  M'$, if all these constituents are strongly normalizing.
+\end{definition}
+
+%% CBN-NC closed under application
+\begin{lemma}
+  \label{lemma:cbn-nc-app}
+  If $M\rrtocbnnc M'$ then $M\;N\rrtocbnnc M'\;N$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  If $M\rrtocbnnc M'$ then $M$ must be of the form $Q\;\vec{R}$ where
+  $Q$ is either a redex or matches case 2 of Definition \ref{def:cbn}.
+  In either case, $M\;N$ cannot be a redex, nor can it match case 2 of
+  Definition \ref{def:cbn}, and so by case 3 of Definition
+  \ref{def:cbn} we have that $M\;N\rrtocbn M'\;N$. In addition, this
+  reduction has the same normalizing constituents as the original CBN
+  reduction, so $M\;N\rrtocbnnc M'\;N$.
+\end{myproof}
+\fi
+
+%% Diamond-y property of CBN
+\begin{lemma}
+  \label{lemma:cbn-diamond}
+  If $M\rrtocbnnc N$ and $M\rrto M'$, then either $M'\equiv N$ or
+  there exists $N'$ such that $M'\rrtocbnnc N'$ and $N\rrtostar N'$,
+  where the latter can be strengthened to $N\rrto N'$ when the
+  reduction $M\rrto M'$ contracts a redex of $M$ that is not a subterm
+  of a constituent of the reduction $M\rrtocbnnc N$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  Let $R$ be the redex contracted by the reduction $M\rrtocbnnc N$ and
+  $R'$ be that contracted by the reduction $M\rrto M'$. We now
+  consider four cases. If $R$ and $R'$ are the same redex, then
+  $M'\equiv N$. If neither $R$ nor $R'$ is a subterm of the other,
+  meaning that $R'$ is not a constituent of $M\rrtocbnnc N$, then
+  immediately we have that $R$ exists in $M'$ and $R'$ exists as a CBN
+  redex in $N$, and reducing either yields an $N'$ such that
+  $M'\rrtocbnnc N'$ and $N\rrto N'$. It is not possible for $R$ to be
+  a strict subterm of $R'$, since by definition call-by-name reduction
+  does not contract strict subterms of redexes.
+
+  In the final case, $R'$ is a strict subterm of $R$. Let $Q'$ be the
+  result of contracting $R'$, and let $Q$ be the result of replacing
+  the subterm $R'$ of $R$ with $Q'$. By contracting $Q$ in $M'$ we get
+  an $N'$ such that $M'\rrtocbn N'$. Further, since reductions inside
+  a constituent cannot cause it to no longer be strongly normalizing,
+  we see that $M'\rrtocbnnc N'$.  In addition, by straightforward
+  structural reasoning it is possible to conclude that the reduction
+  $M\rrtocbnnc N$ replaces zero or more copies of $R'$ exactly where
+  the reduction $M'\rrtocbnnc N'$ places zero or more copies of $Q'$,
+  and that otherwise $N$ and $N'$ are the same, whereby we get that
+  $N\rrtostar N'$.
+  % FIXME: tighten up the above using a lemma about M\rrto M' and
+  % N_i\rrto N_i' implies [\vec{N}/\vec{x}]M \rrto [\vec{N'}/\vec{x}]M'
+\end{myproof}
+\fi
+
+
+%% backwards preservation of SN under CBN-NC reduction
+\begin{lemma}
+  \label{lemma:cbn-nc-sn}
+  If $M\rrtocbnnc N$ and $\SN(N)$ then $\SN(M)$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  We prove that $\SN(M')$ for all $M'$ such that $M\rrto M'$, whereby
+  the result immediately follows, and we proceed by induction on the
+  sum of $\size{N}$ and of $\size{Q_i}$ for the constituents of the
+  reduction $M\rrtocbnnc N$. Using Lemma \ref{lemma:cbn-diamond}, we
+  have three cases: $M'\equiv N$, where the result is immediate; $M'$
+  results from reduction in a constituent of the reduction
+  $M\rrtocbnnc N$, where the result follows by the induction
+  hypothesis on $\size{Q_i}$ for the constituent $Q_i$ of the
+  reduction; or $M'$ results from reduction not in a constituent,
+  where the result follows by the induction hypothesis on $\size{N}$.
+  For the latter two cases, it is straightforward to see that the
+  reduction $M\rrto M'$ cannot increase $\size{N}$ or $\size{Q_i}$
+  for any $Q_i$, and that both cases reduce at least one of these.
+\end{myproof}
+\fi
+
+
+%% Standardization-y property of CBN-NC reduction
+\begin{lemma}
+  \label{lemma:cbn-nc-whnf}
+  If $M\rrtocbnnc N$ and if $M\rrtostar Q$ for weak head normal form
+  $Q$, then $N\rrtostar Q$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  We use the weaker assumption that $M\rrtocbn N$, and proceed by
+  induction on the number of steps in $M\rrtostar Q$. There is no base
+  case for $M\equiv Q$, since $M\rrtocbn N$ precludes the possibility
+  that $M$ is a WHNF. Thus we have $M\rrto M'\rrtostar Q$ for some
+  $M'$. By Lemma \ref{lemma:cbn-diamond} we either have $M'\equiv N$,
+  and the result is immediate, or $M'\rrtocbn N'$ and $N\rrtostar N'$
+  for some $N'$. By the inductive hypothesis we then have that
+  $N'\rrtostar Q$, and so $N\rrtostar Q$ by transitivity of
+  $\rrtostar$.
+\end{myproof}
+\fi
+
+\else
+\fi
+
+
+
+% %%%%%%%%%%%%%%%%%%%
+% %%%%% Section %%%%%
+% %%%%%%%%%%%%%%%%%%%
+% \section{A Cumulative Universe Hierarchy inside ZF}
+% \label{sec:model}
+
+% In order to ensure that our interpretation is well-formed
+% set-theoretically, we first define a basic ``backbone'' of our model
+% by defining interpretations \Ui\ for the universes. Each \Ui\
+% intuitively gives the allowed interpretations for types of sort
+% $\Type_{i-1}$, or of sort \Prop\ for $i=0$. Thus each \Ui\ will
+% contain triples $\triple{\Gamma}{M}{I}$ of contexts $\Gamma$, terms
+% $M$ that are well-typed with respect to $\Gamma$, and valid
+% interpretations $I$ of those terms. To interpret proof terms, we
+% include the ``dummy'' interpretation $\dummy$, as discussed in the
+% Introduction.  The dummy interpretation $\dummy$ is also used for
+% ``stuck'' terms with free variables, as discussed below in Section
+% \ref{subsec:interp}.
+
+
+% To define the \Ui, we use transfinite recursion on ordinals. Ordinals
+% and transfinite recursion are briefly reviewed here, but see any
+% standard reference (e.g., Enderton \cite{enderton77}) for more
+% details. The first ordinal is 0. Each ordinal $\alpha$ has a
+% successor, written $\alpha+1$, which is the least ordinal greater than
+% $\alpha$. Such ordinals are called \emph{successor ordinals}.
+% Finally, any infinite increasing sequence of ordinals also has a least
+% ordinal greater than all ordinals in the sequence. Such ordinals are
+% called \emph{limit ordinals}. Following convention, we write $\lambda$
+% for limit ordinals in this section. We use the natural numbers
+% $1,2,\ldots$ to denote the first, second, etc.\ successors of 0; these
+% are called the \emph{finite ordinals}.  The first infinite ordinal,
+% written $\omega$, is a limit ordinal that is greater than all finite
+% ordinals. Finally, we write $\Omega$ for the first \emph{uncountable}
+% ordinal, which is an ordinal that is greater than an uncountable
+% number of other ordinals. A key property of $\Omega$ is that it is
+% \emph{regular}, which here means that any countable sequence of
+% countable ordinals will have an upper bound which is also countable,
+% i.e., less than $\Omega$.
+
+% The \Ui\ are defined in Figure \ref{fig:universes}, using a number of
+% helper definitions. The first of these, $\F(S)$, intuitively performs
+% one step of constructing a universe \Ui. It takes a set $S$ and adds
+% all tuples of the form $\pair{c}{I_1,\ldots, I_n}$ where each $I_i$ is
+% already in $S$, as well as all countable functions on $S$, i.e., all
+% functions whose domain and range are countable subsets of $S$. The set
+% of countable functions on $S$ is written $\countablefun{S}{S}$.
+
+
+% \begin{figure}
+% \centering
+% %\iftechreport\else\begin{small}\fi
+% \begin{math}
+% \begin{array}{@{}lcl@{}}
+% \F(S) & = &
+% S \;
+% %\begin{array}[t]{@{}l@{}}
+% %\cup\;\{\emptyset,\dummy\}
+% \cup\;\setcompr{\pair{c}{\vec{I}}}{ \forall i.I_i\in S }%\\
+% \;\cup\;(\countablefun{S}{S})
+% %\end{array}
+% \\
+
+% \liftset{i}{S} & = &
+% \setcomprlong{\triple{\Gamma}{A}{I \subseteq (\Ctxt\times\Term\times S)}}{
+%   \SN(A) \mywedge \typej[\Gamma]{A}{\Type_{i-1}} \mywedge \CR{\Gamma}{A}{I}}
+% \\[18pt]
+
+% \Sii{0} & = & \Ii \;\cup\; \setcompr{S}{\exists\Gamma.\exists A.\;\triple{\Gamma}{A}{S}\in\Ui} \\
+% \Sii{\alpha+1} & = & \F(\Sii{\alpha})\\
+% \Sii{\lambda} & = & \bigcup_{\alpha<\lambda} \Sii{\alpha}
+% \\[7pt]
+
+% \Ii[0] & = & \{\dummy\}\\
+% \Ii[i+1] & = & \Sii{\Omega}
+% \\[5pt]
+
+% \Ui & = & \liftset{i}{\Ii}
+% \end{array}
+% \end{math}
+% %\iftechreport\else\end{small}\fi
+% \caption{The Cumulative Universe Hierarchy in ZF}
+% \label{fig:universes}
+% \end{figure}
+
+
+% The next definition in Figure \ref{fig:universes} is $\liftset{i}{S}$,
+% which intuitively forms a universe from a set of allowed
+% interpretations of types.  This function forms the set of all triples
+% $\triple{\Gamma}{A}{I}$ such that: $I$ itself is a set of triples
+% $\triple{\Gamma'}{M}{I'}$ for $I'\in S$; $A$ is strongly normalizing;
+% $A$ has type $\Type_{i-1}$ (where $\Type{-1}$ denotes $\Prop$); and
+% $I$ is a \emph{reducibility candidtate} for $\Gamma$ and $A$, written
+% $\CR{\Gamma}{A}{I}$.  The reducibility candidates are defined below in
+% Section \ref{subsec:interp}, but all we need to know here is that they
+% are a definable class of sets.
+
+% The remainder of Figure \ref{fig:universes} defines the $\Ui$ using
+% the sets $\Sii{\alpha}$, defined by transfinite recursion, along with
+% the sets $\Ii$.  Intuitively, $\Ii$ defines the set of all possible
+% interpretations that could be used in $\Ui$, though some of these are
+% removed by the $\liftset{i}{\cdot}$ function, while $\Sii{\alpha}$ is
+% the set of all interpretations that can be used in $\Ui[i+1]$ after
+% $\alpha$ many steps of construction. The first line defines the base
+% case for $\Sii{\alpha}$ where $\alpha=0$, by combining the set $\Ii$
+% of all interpretations allowed in the previous universe and the set
+% of all interpretations of types in the previous universe. The
+% case for successor ordinals $\alpha+1$ applies $\F$ to the previous
+% step. The case for limit ordinals $\lambda$ takes the union of all
+% $\Sii{\alpha}$ for $\alpha<\lambda$.  The sets $\Ii[i+1]$ are then
+% defined as $\Sii{\Omega}$, i.e., as the union of all $\Sii{\alpha}$
+% for countable $\alpha$.  For $i=0$, we take $\Ii[0]=\{\dummy\}$, which
+% intuitively restricts the interpretations of proofs (since $\Ii[0]$ is
+% used for the $\Prop$ universe) to $\dummy$.  Finally, $\Ui$ is defined
+% as $\liftset{i}{\Ii}$. In the below, we also use the shorthands
+% $\Ui[s]$ and $\Ii[s]$, which denote $\Ui[i+1]$ and $\Ii[i+1]$,
+% respectively, when $s=\Type_i$ and denote $\Ui[0]$ and $\Ii[0]$,
+% respectively, when $s=\Prop$.
+
+
+% In order to better understand the above definitions, we now briefly
+% consider, at a high level, how a number of constructs are interpreted
+% into the \Ui.  As discussed above, a type $A$ is interpreted as a
+% set $S$ of triples $\triple{\Gamma}{M}{I}$ where $\typej{M}{A}$. If
+% $A$ has sort $s$, then the $I$ are all in $\Ii[s]$, and further, for
+% any particular $M$, the actual interpretation of $M$ is guaranteed to
+% be one of the $I$ associated with $M$ in the interpretation of $A$. We
+% can take this ``one level up'' and get that the interpretation of $s$
+% itself, which is $\Ui[s]$, will contain $\triple{\Gamma}{A}{S}$.
+% These properties follow from the Reducibility Theorem, which
+% is not proved until Section \ref{subsec:reducibility}, but it is
+% useful here to understand the intent.
+
+% Constructor applications $\ctorapp{c}{\vec{M}}{\vec{N}}$ are
+% interpreted as tuples $\pair{c}{\vec{I}}$, where $\vec{I}$ are the
+% interpretations of the arguments $\vec{N}$, while functions are
+% interpreted as functions from the interpretations of the inputs to the
+% interpretations of the corresponding outputs. Note that this
+% interpretation of functions does not cause problems for functions of
+% dependent types $\pitype{x}{A}{B}$, since the types $[M/x]B$ for
+% different $M$ are not differentiated in the $\Ii$. The different
+% $[M/x]B$ types are only differentiated when we form $\Ui[s]$.  Stated
+% differently, if $A$ and $B$ both have sort $s$ (the maximum of the
+% sorts of each of $A$ and $B$), then the interpretations of all $M$ of
+% type $A$ and all $N$ of type $[M/x]B$ are in $\Ii[s]$. Thus we can
+% show that any function $f$ from interpretations of terms $M$ of type
+% $A$ to terms $N$ of type $[M/x]B$ will also be in $\Ii[s]$, since $f$
+% will be added to $\Ii[s]$ by some application of the $\F$
+% operator. This requires $f$ to be countable, as $\F$ only adds
+% countable functions, but this holds because there are only countably
+% many terms $M$ of type $A$. Our argument also requires that all
+% interpretations of inputs $M$ and outputs $N$ be in $\Sii{\alpha_f}$
+% for some fixed ordinal $\alpha_f<\Omega$, so that $f$ can be in
+% $\Sii{\alpha_f+1}$. The latter condition follows by regularity of
+% $\Omega$ (not to be confused with the Axiom of Regularity), since each
+% of countably many terms $M$ or $N$ is in $\Sii{\alpha_j}$ for some
+% countable ordinal $\alpha_j$.
+
+
+% The use of the regularity of $\Omega$ here essentially means that we
+% are relying on the fact that $\Omega$ is ``big enough'' to ensure that
+% the necessary $\alpha_f<\Omega$ exists for any countable function
+% $f$. (Note that this explains why use only countable functions in
+% $\F$, as the regularity argument only works for countable functions.)
+% At first glance, it might seem that using $\Omega$ is overkill, and
+% that we might get away with a smaller ordinal. All of the natural
+% numbers, of type $\nat$ (built with constructors \z\ and \s), for
+% exapmle, exist in $\Sii[0]{\omega}$. Thus all functions over \nat\
+% exist in $\Sii[0]{\omega+1}$, and all functions of any higher-order
+% type built from $\nat$ and $\to$ (but not polymorphism) exist in
+% $\Sii[0]{\omega+\omega}$. The key difficulty is in interpreting
+% inductive types with constructors that can take functions that
+% quantify over the inductive type itself.
+
+% For example, the following inductive type, introduced by Coquand et
+% al.\ \cite{coquand97}, captures the countable ordinals definable
+% inside CiC itself:
+% \[
+% \begin{array}{lcl}
+% \ordz & :: & \ord\\
+% \ords & :: & \ord\to\ord\\
+% \ordlim & :: & (\nat\to\ord)\to\ord
+% \end{array}
+% \]
+% The constructors \ordz\ and \ords\ are used to represent zero and
+% successor ordinals, respectively, while \ordlim\ forms a limit ordinal
+% from an infinite sequence of ordinals, here represented as a function
+% from \nat\ to \ord. Intuitively, the interpretation $\interpnod{\ord}$
+% of \ord\ is the least fixed point of the set-theoretic function
+% \[
+% F_{\ord}(S) =
+% \begin{array}[t]{@{}l@{}}
+%   {\;\langle\ordz\rangle\;} \;\cup\; \setcompr{\pair{\ords}{x}}{x\in S}\\
+% \;\cup\; \setcompr{\pair{\ordlim}{f}}{f\in \interpnod{\nat}\to S}
+% \end{array}
+% \]
+% where $\interpnod{\nat}$ is the interpretation of \nat, containing
+% $\langle\z\rangle$ and closed under forming $\pair{\s}{x}$ for all $x$
+% in $\interpnod{\nat}$.
+
+% As mentioned above, it is straightforward to see that all of
+% $\interpnod{\nat}$ is contained in $\Sii[0]{\omega}$.  The same is
+% true for elements of \ord\ built from \ordz\ and \ords.  Any function
+% from (the interpretations of) \nat\ to \ord\ will not occur until
+% $\Sii[0]{\omega+1}$, though, since not all of $\interpnod{\nat}$, the
+% domain, occurs until $\Sii[0]{\omega}$. Thus the first \ordlim\
+% interpretations will occur in $\Sii[0]{\omega+2}$. However, these
+% first \ordlim\ interpretations can only use functions $f$ whose ranges
+% contain only interpretations built with \ordz\ and \ords.  Whenever we
+% add more \ord\ interpretations to $\Sii{\alpha}$, the next step,
+% $\Sii[0]{\alpha+1}$, will contain more functions from (the
+% interpretations of) \nat\ to \ord\ with the new ordinals in their
+% ranges, so there will be more \ordlim\ ordinals in
+% $\Sii[0]{\alpha+2}$.  Further, if we have a sequence $x_1,x_2,\ldots$
+% of elements of \ord\ (which might contain \ordlim) such that each
+% $x_i$ only occurs starting at $\Sii[0]{\alpha_i}$, the function $f$
+% that returns $x_i$ for (the interpretation of) $i$ will first occur in
+% $\Sii[0]{\alpha_{\omega}+1}$, where $\alpha_{\omega}$ is the least
+% upper bound of the $\alpha_i$, and thus $\pair{\ordlim}{f}$ will first
+% occur in $\Sii[0]{\alpha_{\omega}+2}$. By recursing all the way up to
+% $\Omega$, however, we are guaranteed that all functions $f$ and all
+% interpretations $\pair{\ordlim}{f}$ are in $\Ii[1]$.
+% Note that consistency proofs of other theories of inductive sets also
+% require ordinals up to $\Omega$ \cite{pohlers89}.
+
+% The same basic approach works for inductive types
+% $\ctorapp{a}{\vec{M}}{\vec{N}}$ with parameters $\vec{M}$ and type
+% arguments $\vec{N}$, except that, instead of building up a set of
+% interpretations, we build a function $F_a$ from interpretations of
+% parameters $\vec{M}$ and type arguments $\vec{N}$ to interpretations
+% of elements of $\ctorapp{a}{\vec{M}}{\vec{N}}$. A function in ZF is
+% just a set of pairs, so $F_a$ can be built using least fixed-points
+% just as we did for $\ord$. One potential issue is that parameters can
+% be at the same universe level as $a$, meaning that, even though
+% $\ctorapp{a}{\vec{M}}{\vec{N}}$ has sort $\Type_i$, the types of the
+% $\vec{M}$ might have sort $\Type_{i+1}$, not $\Type_i$.  Thus the
+% interpretations of $\vec{M}$ might not be in $\Ii$, even though we are
+% trying to build the interpretation of $\ctorapp{a}{\vec{M}}{\vec{N}}$
+% as a type in $\Ui[i+1]$. The interpretations of the elements
+% $\ctorapp{c}{\vec{M}}{\vec{Q}}$ of $\ctorapp{a}{\vec{M}}{\vec{N}}$,
+% however, contain only the interpretations of the arguments $\vec{Q}$,
+% and not those of the parameters $\vec{M}$, so this is not a problem.
+
+
+% Note, however, that this approach only works for strictly positive
+% inductive types, as otherwise $F_a$ is not monotone, and so is not
+% guaranteed to have a least fixed point. For example, if $a$ has
+% exactly one constructor $c$ of type $(a\to a)\to a$, and if $S$ is a
+% set of potential interpretations of elements of $a$ and $f$ is a
+% function in $S\to S$, then $F_{a}(S)$ would contain $\pair{c}{f}$;
+% however, $f$ would no longer be a function from $F_{a}(S)\to
+% F_{a}(S)$, since it could not have $\pair{c}{f}$ in its domain. Viewed
+% differently, a function $f$ cannot have an interpretation containing
+% itself in its own domain because of the Axiom of Regularity, which
+% states that set membership $\in$ is well-founded. This failure is a
+% good thing, because constructors like $c$ are known to cause
+% non-termination. The same argument also says that \emph{strict}
+% positivity is necessary. For example, we also cannot have a
+% constructor $c$ of type $((a \to B) \to B) \to a$ for some type $B$,
+% since any function $f$ to which $c$ is applied would have to have
+% itself in the domain of its domain. It is not a problem, though, if
+% $a$ is the return type of an argument, such as for $\ordlim$, as a
+% function need not contain every possible element of its return type in
+% its range.
+
+
+% One benefit of the Axiom of Regularity is that we can immediately
+% define primitive recursion over inductive types by using well-founded
+% recursion over the set membership relation $\in$ and its transitive
+% closure $\in^*$.  Using the standard representation of functions and
+% tuples in ZF, we have $N_i\in^*\pair{c}{\vec{N}}$ for each $N_i$, and,
+% if $I$ is in the range of $N_i$ then
+% $I\in^*N_i\in^*\pair{c}{\vec{N}}$. Thus, if we have set-theoretic
+% formulas $\phi_0,\phi_1,\ldots,\phi_n$ that define functions, we can define a
+% function
+% \[
+% \primrecarr[]{F}{\vec{X}\in\vec{S}}{
+%   \pair{c_1}{\vec{I}}\to\phi_1(F,\vec{X},\vec{I})\;|\ldots|\\
+%   \pair{c_n}{\vec{I}}\to\phi_n(F,\vec{X},\vec{I})\;|\;I\to \phi_0(\vec{X},I)
+% }
+% \]
+% that takes $|\vec{X}|+1$ arguments and performs primitive recursion on
+% its last input. The $\phi_i$ are required to always apply $F$ to
+% $|\vec{X}|+1$ arguments, the last of which is an application of some
+% $I_i$ to zero or more arguments.  The resulting function tests whether
+% its last argument is of the form $\pair{c_i}{\vec{I}}$ for some
+% $i$. If so, the function returns $\phi_i$ applied to
+% $F,\vec{X},\vec{I}$, where $F$ is the whole function, used for
+% recursive calls.  If the test fails, $\phi_0(\vec{X},I)$ is returned,
+% where $I$ is the input being tested.  Since any recursive calls to $F$
+% is guarnateed to pass a lesser argument, under the $\in^*$ relation,
+% for argument $|\vec{X}|+1$, the recursion is well-founded and
+% guaranteed to be well-defined.
+
+
+% As a final consideration, the above discussion of interpretations
+% of functions and inductive types only applies to terms which are not
+% proofs, i.e., terms whose types are not of sort $\Prop$. Proofs, in
+% constrast, satisfy Proof Irrelevance, meaning that their
+% interpretations are always $\dummy$. Of course, we cannot know whether
+% a term is a proof or not without normalizing its type.  Instead,
+% this property must come from how we define interpretations.
+% We handle this with the following ``smart constructors'':
+% \[
+% \begin{array}{@{}lcl@{}}
+% \ctorstar{c}{\vec{I}} & \triangleq & \ifthen{c:A:\Prop}{\dummy}{\pair{c}{\vec{I}}}\\
+% \appstar{I_1}{I_2} & \triangleq & \ifthen{I_1=\dummy}{\dummy}{I_1 (I_2)}\\
+% \lamstar{x}{S'}{F(x)} & \triangleq & \ifthen{\forall x.F(x)=\dummy}{\dummy}{F}
+% \end{array}
+% \]
+% For constructor applications, ensuring Proof Irrelevance is
+% straightforward, since we can tell immediately from a constructor
+% whether it belongs to an inductive type of sort $\Prop$ or not.  For
+% function applications, the result is a proof iff the return type of
+% the function is, which holds iff the function itself is a proof and
+% has interpretation $\dummy$. For $\lambda$-abstractions, the term is a
+% proof iff its result type is a proposition iff all return values have
+% interpretation $\dummy$. Each of these tests are captured by the
+% respective definitions above.  Finally, we also enhance
+% the primitive recursion notation above, written using $\primrecname$,
+% to return $\dummy$ as the recursive function when all return values
+% are $\dummy$, as in the notation for $\lambda$-abstractions.
+% % FIXME: say something brief about why variables need not be handled?
+
+
+% \iftechreport
+% \begin{lemma}
+%   \label{lemma:universe-closure}
+%   If $\vec{I}\in\Ii$, $S\subseteq\Ii$,
+%   $F\in\countablefun{\Ii}{\Ii}$, and
+%   either $i\not=0$ or $c:A:\Prop$ (i.e., $c$ is impredicative), then the
+%   following are in $\Ii$:
+%   \begin{enumerate}
+%   \item $\ctorstar{c}{\vec{I}}$;
+%   \item $\appstar{I_1}{I_2}$ when either $I_1=\dummy$ or $I_2\in\Ran(I_1)$; AND
+%   \item $\lamstar{x}{S}{F(x)}$.
+%   \end{enumerate}
+% \end{lemma}
+
+% \begin{myproof}
+%   FIXME HERE: note that this is where we need the countable function
+%   restriction
+
+%   All three cases are immediate when $i=0$, as the only element of
+%   $\Ii[0]$ is $\dummy$, so we show the result for
+%   $\Ii[i+1]$ by proving that the given definitions are all in
+%   $\Fomega(S)$ for $S=\proji{\bigcup\Ui}\cup\{\Ui\}$.  For part 1, if
+%   $c$ is impredicative the result is also immediate. Otherwise, if
+%   there is some finite $n$ such that $\vec{I}\in\F^n(S)$ then
+%   $\pair{c}{\vec{I}}\in\F^{n+1}(S)\subseteq\Fomega(S)$. Otherwise, one
+%   or more of the $I_i$ contain functions over $\Fomega(S)$ in their
+%   transitive closures that are ``built up'' by the final clause in the
+%   definition of $\F$; but the same functions are in the transitive
+%   closure of $\pair{c}{\vec{I}}$ and can be built up in the same way.
+%   For part 2, the result is immediate if $I_1=\dummy$.  Otherwise
+%   $I_1$ must be a function that is built up using the final clause in
+%   the definition of $\F$ (in some $\Ui[j]$ for $j<i$) and thus any
+%   $x\in\Ran(I_1)$ must satisfy $x\in\F^{n}(S)\subseteq\Fomega(S)$. For
+%   part 3, the result is immediate if $\forall x.F(x)=\dummy$ or $F\in
+%   S$. Otherwise consider the sequence of steps of application of $\F$
+%   used to build the elements of $\Dom(F)\cup\Ran(F)$. Since these
+%   sequences of steps are all countable and since $\Dom(F)\cup\Ran(F)$
+%   countable, it is straightforward to build up $F$ with a countable
+%   sequence of steps of application of $\F$ that interleaves the
+%   countably many countable sequences used to build
+%   $\Dom(F)\cup\Ran(F)$.
+% \end{myproof}
+% \fi
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Strong Normalization for CiC}
+\label{sec:cic-sn}
+
+In this section, we give a Uniform Logical Relations (ULR)
+interpretation $\interpnod{\cdot}$ of the terms of CiC and use this to
+prove SN for the well-typed terms of CiC. Types $A$ are interpreted as
+sets of triples $\triple{\Gamma}{M}{I}$ with $\typej{M}{A}$ such that,
+intuitively, $M$ satisfies the logical condition for $A$ and $I$ is a
+valid interpretation of $M$ with respect to $A$. SN is proved via the
+Reducibility Theorem, which states that
+$\triple{\Gamma}{M}{\interpnod{M}}$ is in $\interpnod{A}$ whenever $M$
+has type $A$ (relative to $\Gamma$) and $A$ itself satisfies
+$\triple{\Gamma}{A}{\interpnod{A}}$ is in $\interpnod{s}$ for some
+sort $s$. SN follows since all interpretations in $\interpnod{s}$ must
+be \emph{reducibility candidates}, which among other things require
+that they contain only strongly normalizing terms.
+
+
+% FIXME HERE: explain that $\Gamma$ gives the allowed FVs in a term;
+% move some of the discussion here from the beginning of the next
+% sub-section
+% - The reason for including $\Gamma$ is to allow FVs in M with no interp
+% - Need to do this to prove Reducibility for lambdas
+
+
+% In the remainder of this section, Section \ref{subsec:interp} gives a
+% ULR interpretation for CiC that maps terms into the $\Ui$ hierarchy of
+% Section \ref{sec:model}, and Section \ref{subsec:reducibility} then
+% proves the Reducibility Theorem, implying SN for CiC.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Sub-Section %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Reducibility Candidates}
+\label{subsec:reducibility-candidates}
+
+To prove SN for the bodies of lambdas, which can
+quantify over potentially empty domain types, we need to be able to support
+free variables which may have no valid interpretation. To do this, we
+define the concept of \emph{stuck terms}, which intuitively are the
+free variables closed under application and pattern-matching
+elimination forms. We then ensure (in the definition of Reducibility
+Candidates, below) that all stuck terms have the dummy interpretation
+$\dummy$.
+
+\begin{definition}[Stuck Terms]
+  \label{def:stuck}
+  The \emph{stuck terms} are defined inductively as follows. If $M$
+  is a stuck term, then so are:
+  \begin{itemize}
+  \item $x$ and $u$ for variable $x$ or recursive variable $u$;
+  \item $M\;N$ for any $N$; and
+  \item $\Mfun\;\vec{N}\;M$ for pattern-matching function $\Mfun$
+    that takes $|\vec{N}|$ parameters.
+  \end{itemize}
+\end{definition}
+
+
+Since types can also be stuck terms, we define the notation
+$\denotation{\Gamma}{A}{I}$, called the \emph{set denoted by $I$}
+(relative to $\Gamma$ and $A$), as follows: if $I=\dummy$,
+then $\denotation{\Gamma}{A}{I}$ is the set of SN terms
+of type $A$, i.e., the set
+\[
+\setcompr{\triple{\Gamma'}{M}{\dummy}}{\Gamma'\geq\Gamma \mywedge \typej[\Gamma']{M}{A} \mywedge \SN(M)}
+\]
+Otherwise $\denotation{\Gamma}{A}{I}=I$. Intuitively, this turns the
+dummy interpretation into a dummy type.  We often use
+$\denotationnot{I}$ when $\Gamma$ and $A$ can be inferred from
+context.
+
+We can now define the reducibility candidates, which
+constitute the well-formed sets denoted by interpretations of types.
+Note that these are very similar to the saturated sets of, e.g.,
+Coquand and Gallier \cite{coquand90} and Geuvers \cite{geuvers94}:
+
+
+\begin{definition}[Reducibility Candidate]
+  We say that $I$ is a \emph{reducibility candidate for $\Gamma$ and
+    $A$}, written $\CR{\Gamma}{A}{I}$ (or $\CRnot{I}$ when $\Gamma$
+  and $A$ can be inferred from context), iff
+  $S=\denotation{\Gamma}{A}{I}$ is a set of triples such that,
+  whenever $\triple{\Gamma'}{M}{I'}\in S$, we have the following
+  named properties:
+  \begin{description}%\vspace{8pt}
+  \item[\hfill\textbf{(G):}] \hspace*{10pt} $\Gamma'\geq\Gamma$;
+  \item[\hfill\textbf{(E):}] \hspace*{10pt} If $\Gamma''\geq\Gamma'$ then $\triple{\Gamma''}{M}{I'}\in S$;
+  \item[\hfill\textbf{(T):}] \hspace*{10pt} $\typej[\Gamma']{M}{A}$;
+
+  \item[\textbf{(CR 1):}] \hspace*{10pt} $\SN(M)$;
+  \item[\textbf{(CR 2):}] \hspace*{10pt} If $M\rrto M'$ then
+    $\triple{\Gamma'}{M'}{I'}\in S$;
+  \item[\textbf{(CR 3):}] \hspace*{10pt} If $M'\rrtocbnnc M$ then
+    $\triple{\Gamma'}{M'}{I'}\in S$; and
+  \item[\textbf{(CR 4):}] \hspace*{10pt} If $M'$ is a
+    stuck term such that $\SN(M')$ and if $\typej[\Gamma'']{M'}{A}$
+    for $\Gamma''\geq\Gamma'$ then $\triple{\Gamma''}{M'}{\dummy}\in S$.
+  \end{description}
+\end{definition}
+
+
+As an immediate application of this definition, it is straightforward
+to see that $\dummy$ defines a reducibility candidate:
+\begin{lemma}
+  \label{lemma:cr-dummy}
+  $\CR{\Gamma}{A}{\dummy}$ for all $A$ with $\typej{A}{s}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  \CRG, \CRE, \CRT, \CRone, and \CRfour\ are immediate. \CRtwo\
+  follows because $\SN(M)$ and $M\rrto M'$ implies $\SN(M')$.
+  \CRthree\ follows by Lemma \ref{lemma:cbn-nc-sn}.
+\end{myproof}
+\fi
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Sub-Section %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{A ULR Interpretation for CiC}
+\label{subsec:interp}
+
+We now define the interpretation $\interp{M}$ in Figure
+\ref{fig:cic-ulr}.  This is defined relative to a context $\Delta$
+and an \emph{interpretation valuation} $\Xi$ of the following
+syntax:
+\[
+\Xi ::= \cdot \bor \Xi,\dxform{N}{I} \bor \Xi,\duform{N}{I} \bor \Xi,a\mapsto I
+\]
+Intuitively, interpretation valuations map variables and
+recursive variables to a pair of a term and an interpretation
+of the term. Considering just the terms, interpretation
+valuations define a substitution, written $\Dsubst$,
+while $\Dlookup{\cdot}$ looks up just the interpretation associated
+with some $x$, $u$, or $a$.
+We also use the following abbreviated notations:
+$\dgform{\vec{N}}{\vec{I}}$ represents the interpretation
+valuation $\dxform[x_1]{N_1}{I_1},\ldots,\dxform[x_n]{N_n}{I_n}$; the notation
+$\interpd{A}$ represents $\denotation{\Delta}{\Dsubst(A)}{\interp{A}}$;
+the notations $\interp{\vec{M}}$ and
+$\interp{\Gamma'}$ denote sequences of interpretations of each of the
+$M_i$ or the types in $\Gamma'$, respectively; and finally
+$\triple{\vec{\Delta}}{\vec{N}}{\vec{I}}\in\interpd[\iargs{\Delta_0}{\Xi}]{\Gamma}$
+denotes the fact that that $\triple{\Delta_i}{N_i}{I_i}$ is in
+$\interpd[\iargs{\Delta_{i-1}}{\Xi}]{A_i}$ for each type $A_i$ in
+$\Gamma$.
+% We also sometimes drop the context $\Gamma$ when
+% it can be inferred from the text, writing $\interp[\Delta]{M}$
+% instead of $\interp{M}$.
+
+
+%%%%% interpretation figure %%%%%
+
+\begin{figure*}
+\centering
+\iftechreport\else\begin{small}\fi
+\begin{math}
+\begin{array}{@{}l@{\hspace{6pt}}c@{\hspace{6pt}}l@{}}
+% sorts in general
+  \interp{\Type_i} & = &
+  \setcompr{\triple{\Delta}{A}{I \subseteq(\Ctxt\times\Term\times\Ii)}}{
+    \SN(A) \mywedge \typej[\Delta]{A}{\Type_{i-1}} \mywedge \CR{\Delta}{A}{I}}
+\\
+
+% % prop
+%   \interp{\Prop} & = &
+%   \setcompr{\pair{A}{I}}{ % \typejemp{A}{\Prop} \mywedge
+%     \SN(A) \mywedge \CR{I} \mywedge I\in\Ui[0]}\\
+
+% % predicative types
+% \interp{\Type_i} & = &
+% \setcompr{\pair{A}{I}}{ % \typejemp{A}{\Type_i} \mywedge
+%   \SN(A) \mywedge \CR{I} \mywedge I\in\Ui[i+1]}\\
+
+% Pi-types
+\interp{\pitype{x}{A}{B}} & = &
+\setcomprlong{\triple{\Delta\geq\Delta}{M}{(\lamstarnot{p}{\appstar{F}{p}})}}{
+  \typej[\Delta']{M}{\pitype{x}{A}{B}} \mywedge\\
+  %\ind{2}
+  \forall(\triple{\Delta''\geq\Delta'}{N}{I}\in\interpd[\iargs{\Delta'}{\Xi}]{A}) .\;
+  \triple{\Delta''}{M\;N}{\appstar{F}{\triple{\Delta''}{N}{I}}} \in\interpd[\iargs{\Delta''}{\Xi,\dxform{N}{I}}]{B}
+}
+\\
+%\\
+
+% inductive types
+\interp{\ctorapp{a}{\vec{M}}{\vec{N}}} & = &
+(\ifthen{a\mapsto F\in\Xi}{F}{\interpind{a}})
+(\Delta,\Dsubst(\vec{M}),\Dsubst(\vec{N}), \interp{\vec{M}},\interp{\vec{N}})
+
+\\
+%\\
+
+% bottom
+%\interp{\bot} & = & \dummy
+%\\
+
+% variables
+\interp{x} & = & \Dlookup{x}
+\\
+
+% recursive variables
+\interp{u} & = & \Dlookup{u}
+\\
+
+% applications
+\interp{M\;N} & = & \appstar{\interp{M}}{\triple{\Delta}{N}{\interp{N}}}\\
+
+% lambdas
+\interp{\lamabs{x}{A}{M}} & = &
+\lamstar{\triple{\Delta'}{N}{I}}{\interpd{A}}{\interp[\iargs{\Delta'}{\Xi,\dxform{N}{I}}]{M}}
+\\
+
+% constructors
+% \interp{\ctorapp{c^{-1}}{\vec{M}}{\vec{N}}} & = & \dummy\\
+% \interp{\ctorapp{c^i}{\vec{M}}{\vec{N}}} & = & \pair{c}{\interp{\vec{N}}}\\
+\interp{\ctorapp{c}{\vec{M}}{\vec{N}}} & = &
+%\ifthen{c:\Prop}{\dummy}{\pair{c}{\interp{\vec{N}}}}
+\ctorstar{c}{\interp{\vec{N}}}
+\\[5pt]
+
+% predicative pm-functions
+%\\
+\multicolumn{3}{@{}l@{}}{
+\interp{\Mfun=\ppmfun{u}{\Gammaarg}{\pc{\vec{c}}{\vec{\Gamma}}{\vec{M}}}}
+}
+\\
+& = &
+\begin{array}[t]{@{}l@{}}
+  \primrecnl{F}{\triple{\vec{\Delta}}{\vec{N}}{\vec{I}}\in\interpd{\Gammaarg}}{
+        \ldots|\;\triple{\Delta''}{\ctorapp{c_i}{\vec{Q}}{\vec{N'}}}{\pair{c_i}{\vec{I'}}} \to \interp[\iargs{\Delta''}{\Xi,\dgargform{\Gamma}{\vec{N}}{\vec{I}},\dgargform{\Gamma_i}{\vec{N'}}{\vec{I'}},\duform{\Mfun}{F}}]{M_i}
+        \;|\ldots|\;X \to \dummy
+      }
+  \end{array}
+% \primrec{F}{
+%   \begin{array}[t]{@{}l@{}}
+%     \lamstar{\pair{\vec{N}}{\vec{I}}}{\interpd{\Gammaarg}}{
+%       \lamstar{\pair{N}{I}}{\interpd[\Delta,\Gammaarg\mapsto\pair{\vec{N}}{\vec{I}}]{\ctorapp{a}{\vec{Q}}{\vec{R}}}}{\\
+%         \ind{1} \mathsf{match}\;\pair{\NF(N)}{I}\;\mathsf{with}\\
+%         \ind{2}|\;
+%         \pair{\ctorapp{c_i}{\vec{v}}{\vec{v'}}}{\pair{c_i}{\vec{I'}}} \to \interp[\Delta,\Gammaarg\mapsto\pair{\vec{N}}{\vec{I}},\Gamma_i\mapsto\pair{\vec{v'}}{\vec{I'}},\duform{F}]{M_i}
+%         \\
+%         \ind{2}|\;\pair{v}{I} \to \dummy
+%       }}
+%   \end{array}
+% }
+\\[5pt]
+
+% impredicative pm-functions
+%\\
+\multicolumn{3}{@{}l@{}}{
+\interp{\Mfun=\ipmfun{u}{\Gammaarg}{\pc{\vec{c}}{\vec{\Gamma}}{\vec{M}}}}
+}
+\\
+& = &
+\begin{array}[t]{@{}l@{}}
+  \lamstar{\triple{\vec{\Delta}}{\vec{N}}{\vec{I}}}{\interpd{\Gammaarg}}{\lamstar{I}{\interpd[\iargs{\Delta_n}{\Xi}]{\ctorapp{a}{\vec{Q}}{\vec{R}}}}{
+    \\\ind{1}
+    \bigsqcap_{\triple{\Delta''}{\vec{N'}}{\vec{I'}}\in\interpd{\Gamma_i,\Afun}}\interp[\iargs{\Delta''}{\Xi,\dgform[\Gammaarg]{\vec{N}}{\vec{I}},\dgform[(\Gamma_i,u)]{\vec{N'}}{\vec{I'}}}]{M_i}
+    }}
+  \end{array}
+
+\\ \\
+
+\multicolumn{3}{@{}l@{}}{
+\interpind{a} %\hspace{35pt}
+=
+\begin{array}[t]{@{}l@{}}
+\mu F (\Delta, \vec{M}, \vec{N}, \vec{X},\vec{Y}).\\
+\ind{1}
+\setcomprarr{\triple{\Delta'}{M}{I}}{
+  % typing and SN
+  \Delta'\geq\Delta \mywedge \SN(M) \mywedge
+  \typej[\Delta']{M}{\ctorapp{a}{\vec{M}}{\vec{N}}} \mywedge
+  \\
+
+  % arguments are in their LRs
+  (%\begin{array}[t]{@{}l@{}}
+    \forall\vec{Q}\forall\vec{R}.\; M\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}
+    \myimplies c:\pigamma{\Gamma_p}{\pigamma{(x_1\!:\!A_1,\ldots,x_n\!:\!A_n)}{\ctorapp{a}{\Gamma_p}{\vec{M_c}}}} \in\Sigma
+    \mywedge\\
+    \ind{2}
+    \exists \Delta''.\exists\vec{I}.\forall i.\;
+    \triple{\Delta''}{R_i}{I_i}\in\interpd[a\mapsto F,\Gammap\mapsto\vec{X},\vec{x}\mapsto\vec{I}]{A_i}
+    \mywedge I=\ctorstar{c}{\vec{I}}
+    \mywedge \interp[\Gammap\mapsto\vec{X},\vec{x}\mapsto\vec{I}]{\vec{M_c}}=\vec{Y}) \mywedge
+  %\end{array}
+  \\
+  %\iftechreport\else\\\ind{1}\fi
+%   (a\not\,:\pigamma{\Gammap}{\pigamma{\Gammaa}{\Prop}} \myimplies I=\pair{c}{\vec{I}})
+%   \mywedge
+%  \\
+
+  % special forms of I
+  (\neg(\exists c.\exists\vec{Q}\exists\vec{R}.\;M\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}})
+  \myimplies I=\dummy)
+
+%   \left(\begin{array}{l}
+%       (I=\pair{c}{\vec{I'}} \mywedge \NF(M)=\ctorapp{c}{\vec{v'}}{\vec{v}}
+%       \mywedge \pair{(\vec{v},\vec{v'})}{(\vec{I},\vec{I'})}\in\interpd{\Gammac})
+%       \\
+%       \vee
+%       (I=\dummy \mywedge a : \pigamma{\Gammaa}{\Prop})
+%       \vee
+%       (I=\dummy \mywedge \not\exists c.\NF(M)=\ctorapp{c}{\vec{v'}}{\vec{v}})
+%   \end{array}\right)
+}
+\end{array}
+}
+
+\end{array}
+\end{math}
+\iftechreport\else\end{small}\fi
+\caption{A Uniform Logical Relations Interpretation for CiC}
+\label{fig:cic-ulr}
+\end{figure*}
+
+
+Let $\Term(i)$ denote the set of all terms that do not contain
+$\Type_{j}$ for $j\geq i$, denoting $\Prop$ by $\Type_{-1}$.  The
+interpretation $\interp{M}$ is defined by primary induction the least
+$i$ such that $M\in\Term(i)$, by secondary induction on the number of
+inductive types $a$ \emph{not} in $\Dom(\Delta)$, and by tertiary
+induction on the structure of $M$. The primary induction hypothesis
+used to define the interpretation of sorts $\Type_i$, which works
+because normal forms of type $A$ such that $A$ has type $\Type_i$ do
+not contain $\Type_i$. The secondary induction hypothesis is used to
+define the interpretations of inductive types, which works because the
+type of any $a$ can only contain constructors and type constructors
+which come before $a$ in $\Sigma$.  Otherwise $\interp{\cdot}$ is
+defined using the tertiary induction hypothesis, structural induction
+on $M$.
+
+In order to handle the dummy interpretation $\dummy$, we define the
+following ``smart constructors'':
+\[
+\begin{array}{@{}lc@{\hspace{5pt}}l@{}}
+\ctorstar{c}{\vec{I}} & \triangleq & \ifthen{c:A:\Prop}{\dummy}{\pair{c}{\vec{I}}}\\
+\appstar{F}{I} & \triangleq & \ifthen{F=\dummy}{\dummy}{F (I)}\\
+\multicolumn{3}{@{}l@{}}{
+  \lamstar{x}{S}{F(x)} \triangleq \ifthen{\forall x.F(x)=\dummy}{\dummy}{F}
+}
+\end{array}
+\]
+The first constructs the interpretation of
+$\ctorapp{c}{\vec{M}}{\vec{N}}$ from the interpretations $\vec{I}$ of
+$\vec{N}$. In order to satisfy Proof Irrelevance, the result is
+$\dummy$ when $c$ is impredicative, and otherwise is
+$\pair{c}{\vec{I}}$. The second applies a function $F$ to an argument
+$I$, returning $\dummy$ if $F$ is $\dummy$.  The third constructs a
+set-theoretic function using $\lambda$ notation, returning $\dummy$ if
+the function is uniformly $\dummy$.
+
+
+As discussed above, a type $A$ is interpreted as a set of triples
+$\triple{\Delta}{M}{I}$ where $\typej{M}{A}$.  Thus the interpretation
+of $\Type_i$, which is a type of types, contains all possible triples
+$\triple{\Delta}{A}{I}$ where $A$ is a type and $I$ itself is a set of
+triples that forms a reducibility candidate for $A$. In order to
+include all possible reducibility candidates $I$ for $A$, we
+quantify $I$ over the set of all triples $\triple{\Delta'}{M}{I'}$
+where $I'$ is in $\Ii$, defined as follows:
+\[
+\begin{array}{@{}l@{\hspace{5pt}}c@{\hspace{5pt}}l@{}}
+  \Ii[-1] & = & \{*\}\\
+  \Ii[i\geq 0] & = & \mu X.\setcomprarr{\interp{M}}{M\in\Term(i) \mywedge \\\Ran(\Xi)\subseteq \Term(i)\times X}
+\end{array}
+\]
+$\Ii[-1]$ contains only $*$ because of Proof Irrelevance, while all
+other $\Ii$ contain the set of all interpretations of any $M$ that
+does not itself contain $\Type_i$.
+
+
+The interpretation of function types $\pitype{x}{A}{B}$ is the set of
+all triples $\triple{\Delta'}{M}{F}$ such that, for all
+$\triple{\Delta''}{N}{I}$ in $\interpd[\iargs{\Delta'}{\Xi}]{A}$ we
+have that applying $M$ to $N$ and applying $F$ to
+$\triple{\Delta''}{N}{I}$ yields a triple (with first element
+$\Delta''$) in the interpretation of $B$.  Note that we require $F$ to
+have the form $\lamstarnot{p}{\appstar{F}{p}}$, meaning that
+$F=\dummy$ whenever all of the outputs of $F$ are $\dummy$.
+
+Inductive type constructors $a$ are interpreted by applying either
+$\Dlookup{a}$, if it is defined, or the result of the helper
+definition $\interpind{a}$, to the parameters and type
+arguments, along with their interpretations, of $a$.
+The helper definition constructs a function $F$
+using the least fixed-point operator $\mu$, returning a set
+of triples $\triple{\Delta'}{M}{I}$ where $M$ is strongly normalizing
+of the correct type and that satisfies the following: if $M$ rewrites
+to a constructor term $\ctorapp{c}{\vec{Q}}{\vec{R}}$, then $I$ must
+be $\ctorstar{c}{\vec{I}}$, where the $\vec{I}$ are valid
+interpretations for the $\vec{R}$, i.e., the $\vec{R}$ occur in
+triples with the $\vec{I}$ in the interpretations of their types. Note
+that, if $a$ is impredicative, $\ctorstar{c}{\vec{I}}=\dummy$.
+Further, we require $c$ to be a constructor of $a$ and the
+interpretations of the arguments $\vec{M_c}$ in the return type of $c$
+to equal the arguments $\vec{Y}$. Otherwise, if $M$ rewrites to no
+such term, $I=\dummy$. We can see that this use of the least
+fixed-point operator $\mu$ is guaranteed to be well-defined because
+$a$ can only be used strictly positively in the argument types $A_i$
+of its constructors.
+
+
+The interpretations of variables and recursive variables look those
+variables up in $\Delta$. The interpretation of an application applies
+(using $\appstar{I_1}{I_2}$) the interpretation of the function to
+that of the argument. The interpretation of a $\lambda$-abstraction
+forms a function (using the $\lamstar{I}{S}{F(x)}$ notation) that
+takes in an interpretation for its argument and returns the
+interpretation of the body. The interpretation of a constructor term
+$\ctorapp{c}{\vec{M}}{\vec{N}}$ applies the constructor (using the
+$\ctorstar{c}{\vec{I}}$ notation) to the interpretations of the
+arguments $\vec{N}$.
+
+The interpretation of a predicative pattern-matching function performs
+primitive recursion on the scrutinee. This is
+justified by the Axiom of Regularity, since any recursive calls are
+through interpretations of the recursive variable $u$, which is
+guaranteed to only be applied to variables that match subterms of the
+scrutinee. If the scrutinee is a triple of a context $\Delta''$, an
+application of $c_i$, and the interpretation $\pair{c_i}{\vec{I}}$ of
+an application of $c_i$, then the interpretation of $M_i$ is returned,
+possibly with primitive recursive calls to the entire function;
+otherwise, $\dummy$ is returned in the catch-all case, which holds when
+the scrutinee is a stuck term.
+
+
+The final case is that for impredicative pattern-matching functions.
+Because of Proof Irrelevance, the scrutinee for such a function will
+always have interpretation $\dummy$, and thus we cannot perform
+primitive recursion on it. Instead, the interpretation of an
+impredicative pattern-matching function throws away its input, and
+instead considers \emph{all possible} interpretations of the pattern
+cases $M_i$, for all possible interpretations that can be assigned to
+the pattern variables $\Gamma_i$ and the recursive function variable
+$u$.  If all possible interpretations of the $M_i$ are all
+equal to some result $I$, then the interpretation of the impredicative
+pattern-matching function returns $I$. Otherwise the interpretation is
+undefined. This is written with the notation $\bigsqcap S$, where
+$\bigsqcap\{I\}=I$, $\bigsqcap\{\}=\dummy$, and $\bigsqcap S$ is
+undefined otherwise.
+
+The reason this approach works is due to Proof Irrelevance. If the
+return type is a proposition, then all pattern cases are proofs and so
+must all have the same interpretation $\dummy$. Otherwise we either
+have that the scrutinee type must be an empty type, so there are no
+pattern cases (and $\dummy$ is returned), or the scrutinee type must
+be a singleton type whose sole constructor takes only proof arguments,
+and there is only one possible interpretation, again $\dummy$, for
+those arguments.
+% Note that one ramification of this approach to
+% interpreting impredicative pattern-matching functions is that
+% $\interp{M}$ is not always defined for ill-typed $M$.
+
+
+The following structural properties can be proved by straightforward
+induction on the definition of $\interp{\cdot}$:
+
+\begin{lemma}[Interpretation Weakening]
+  \label{lemma:weakening}
+  $\interp[\iargs{\Delta}{\Xi_1,\Xi_2,\Xi_3}]{M}=\interp[\iargs{\Delta}{\Xi_1,\Xi_3}]{M}$
+  for any $M$ and $\Xi_i$ when both of these are defined.
+\end{lemma}
+
+
+\begin{lemma}[Interpretation Substitution]
+  \label{lemma:substitution}
+  $\interp[\iargs{\Delta}{\Xi,\dxform{N}{\interp{N}}},\Xi']{M}=
+  \interp[\iargs{\Delta}{\Xi,\Xi'}]{[N/x]M}$ or both of these are
+  undefined. % for any $M$, $N$, $\Delta$, $\Xi$, and $\Xi'$.
+\end{lemma}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Sub-Section %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{Proving Reducibility}
+\label{subsec:reducibility}
+
+In order to prove Reducibility, we first need to define the notion of
+well-formed interpretatino valuations.
+We say that $\Xi$ is \emph{well-formed} with respect to input
+context $\Gamma$ and output context $\Delta$,
+written $\ivtypej{\Xi}{\Delta}$, iff:
+\begin{enumerate}
+\item $\typej{\Dsubst[\Xi]}{\Delta}$, meaning that
+  $\Dom(\Dsubst[\Xi])=\Dom(\Gamma)$ and that
+  $\forall x\in\Dom(\Dsubst[\Xi]).\;\typej[\Delta]{\Dsubst[\Xi](x)}{\Dsubst[\Xi](\Gamma(x))}$;
+
+\item $\Dom(\Xi)$ restricted to variables and recursive variables
+  equals $\Dom(\Gamma)$;
+
+\item For all $x\in\Dom(\Gamma)$ we have
+  $\triple{\Delta}{\Dsubst[\Xi](x)}{\Dlookup{x}}\in\interpd{\Gamma(x)}$;
+
+\item For all $\guform{n}{\vec{x}}{\pigamma{\Gamma_u}{B}}\in\Gamma$ and for all $x_i$ we have
+  $\triple{\Delta}{\Dsubst[\Xi](u)\;\vec{N}\;\Dsubst[\Xi](x_i)}{\appstar{\appstar{\Dlookup{u}}{\vec{I}}}{\Dlookup{x_i}}}\in\interpd{B}$
+  whenever $\forall j.\;\triple{\Delta}{N_j}{I_j}\in\interpd{A_j}$ where
+  $A_1,\ldots,A_m$ are the types in $\Gamma_u$; and
+
+\item For all $a\in\Dom(\Xi)$ we
+  have that $\Dlookup{a}$ is a function from
+  $(\Delta,\vec{M},\vec{N},\vec{I},\vec{I'})$ for
+  $\triple{\Delta}{\vec{M},\vec{N}}{\vec{I},\vec{I'}}\in\interpd{\Gamma_p,\Gamma_a}$
+  to reducibility candidates for $\ctorapp{a}{\vec{M}}{\vec{N}}$.
+\end{enumerate}
+At a high level, the idea is that, whenever we form $\interp{M}$,
+$\Gamma$ lists the function arguments in scope, and $\Xi$ lists terms
+and interpretations that have been passed in for these arguments.  In
+order to state that an interpretation passed for $x$ is valid, it must
+be associated with the term $\Dsubst[\Xi](x)$ passed for $x$.  The
+output context $\Delta$ means that the range of $\Dsubst[\Xi]$ can
+contain open terms. For recursive variables $u$, the requirement is
+looser, only requiring that the interpretation of any fully applied
+occurrence of $u$ is valid given the value of $\Dlookup{u}$.  As an
+example, for any $\Gamma$ we have
+$\ivtypej{\dgform[\Gamma]{\Gamma}{\vec{\dummy}}}{\Gamma}$ where
+$\dgform[\Gamma]{\Gamma}{\vec{\dummy}}$ assigns term $x$ and
+itnerpretation $\dummy$ to each variable $x\in\Dom(\Gamma)$.  Using
+$\dummy$ here is valid by \CRfour\ because the variables of $\Gamma$
+and fully applied recursive variables of $\Gamma$ are stuck terms.
+
+
+\begin{lemma}[Proof Irrelevance]
+  \label{lemma:proof-irrelevance}
+  Let $\ivtypej{\Xi}{\Delta}$ and
+  $\triple{\Delta'}{\Dsubst{B}}{\interp{B}}\in\interpd[]{\Prop}$.  If
+  $\triple{\Delta''}{M}{I}\in\interpd{B}$ then $I=\dummy$.
+\end{lemma}
+
+\iftechreport
+FIXME HERE: proof!
+\fi
+
+% FIXME HERE: tweak this explanation of impred pm funs a bit...
+Conversion is mostly straightforward by Interpretation
+Substitution. The interesting case is reduction of an impredicative
+pattern-matching function applied to a constructor application in the
+scrutinee. The result follows in this case from the requirement that
+the interpretation of the source term $M$ is well-defined, as this
+ensures that the interpretation of the result, which has the form
+$\sigma M_i$ for some $\sigma$ and some pattern-case $M_i$ of the
+impredicative pattern-matching function, is independent of the
+particular $\sigma$ used, and so is equal to the interpretation
+returned by the pattern-matching function. Subtyping then follows
+directly.
+
+
+\begin{lemma}[Conversion]
+  \label{lemma:interp-eq}
+  If $M\rrto N$ then we have that $\interp{M}=\interp{N}$ whenever both of these
+  are defined.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  By straightforward induction on $M$.
+\end{myproof}
+\fi
+
+
+%% subtyping
+\begin{lemma}[Subtyping]
+  \label{lemma:subtyping}
+  If $A_1\subtype A_2$ then we have that $\interpd{A_1}\subseteq\interpd{A_2}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  By straightforward induction, using the fact that
+  $\interpd{s_1}\subseteq\interpd{s_2}$ whenever $s_1\subtype s_2$ for
+  the base case.
+\end{myproof}
+\fi
+
+
+We now prove the main result of this section, Reducibility, which
+states that if $\typej{M}{A}$ then $\interp{M}$ is well-defined and is
+a valid interpretation of $M$.  This assumes that $\interp{A}$ itself
+is valid, meaning that it is a valid reducibility candidate. As
+discussed above, we must also assume $\ivtypej{\Xi}{\Delta}$.  Since,
+at a high level, $\Xi$ acts as an ``interpretation substitution'' for
+the variables in $M$, we have that $\interp{M}$ is actually a valid
+interpretation for $\Dsubst(M)$, with respect to the output context
+$\Delta$.  Thus Reducibility yields
+$\triple{\Delta}{\Dsubst(M)}{\interp{M}}\in\interpd{A}$.  This is not
+a restriction, though, as we can always take $\Delta=\Gamma$ and
+$\Xi=\dgform[\Gamma]{\Gamma}{\vec{\dummy}}$ as discussed above,
+which can be used to show SN for terms $M$ with free variables.
+
+%%%%% Reducibility Theorem %%%%%
+
+\begin{theorem}[Reducibility]
+  If $\typej{M}{A}$ and $\typej{A}{s}$, and if
+  $\triple{\Delta}{\Dsubst(A)}{\interp{A}}\in\interpd[]{s}$ for
+  $\ivtypej{\Xi}{\Delta}$, then
+  $\interp{M}$ is defined and
+  $\triple{\Delta}{\Dsubst(M)}{\interp{M}}\in\interpd{A}$.
+\end{theorem}
+
+\begin{myproof}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Tech Report Proof Details                                  %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\iftechreport
+FIXME HERE: fix up the proofs!
+\begin{itemize}
+\item we are now using triples of typed terms
+\item ``meaningless terms'' $\longrightarrow$ ``stuck terms''
+\end{itemize}
+
+
+FIXME HERE: check this paragraph\ldots
+
+The following lemmas now prove each of the cases of the Reducibility
+Theorem. An interesting aspect of this proof is that we do not have to
+prove, as a separate lemma, that $\CR{\Gamma}{A}{\interpd{A}}$ holds, i.e., that the
+interpretation of $A$ gives a valid Reducibility Candidate; this result is part of Reducibility for
+$A$, i.e., it is implied by
+$\triple{\Gamma}{A}{\interp{A}}\in\interpd{s}$ for $\typej{A}{s}$.  In the
+below, we say that term $M$ is reducible at $\Gamma$ and $A$, relative to
+$\Delta$ and $\sigma$, iff $\tctypej$ and the triple
+$\triple{\Gamma'}{\sigma(M)}{\interp{M}}$ is in $\interpd{A}$. We often omit $A$,
+$\Delta$, and/or $\sigma$ when these are clear from context. In
+addition, we say that $\Gamma=x_1:A_1,\ldots,x_n:A_n$ is reducible
+relative to $(\Delta;\sigma)$ iff $\tctypejdef$ and, for all $\Delta_i$
+and $\sigma_i$ that map variables $x_j$ for $j<i$ to terms
+$\pair{N_j}{I_j}\in\interpd[\Delta_i]{A_j}$ we have that
+$\pair{(\sigma,\sigma_i)(A_i)}{\interp[\Delta,\Delta_i]{A_i}}\in\interpd[]{s_i}$
+for some $s_i$. Again, we often omit $\Delta$ and $\sigma$ when they
+are clear from context.  \iftechreport Finally, we often appeal to
+properties \CRone\ through \CRfour\ of a type $A$, where technically
+what is meant is the properties of the set $\interpd{A}$ for the
+appropriate $\Delta$.  \fi
+
+
+%% sorts
+\begin{lemma}[Inclusion of Sorts]
+  \label{lemma:sorts}
+  If $\typejemp{s_1}{s_2}$ then we have that
+  $\triple{\Gamma}{s_1}{\interp{s_1}}\in\interpd[]{s_2}$ for all
+  $\Gamma$ and $\Delta$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  $\SN(s_1)$ is immediate, as is $\pair{s_1}{\interp{s_1}}\in\Ui$
+  where $s_2=\Type_i$ ($s_2$ cannot be $\Prop$).  All that remains is
+  to prove $\CRnot{\interp{s_1}}$:
+  \begin{description}
+  \item[\textbf{(CR 1):}] \hspace*{10pt} Immediate.
+  \item[\textbf{(CR 2):}] \hspace*{10pt} If $\SN(A)$ and $A\rrto A'$,
+    then $\SN(A')$; the remaining conditions are immediate.
+%     and $\CR{A'}{I}$ holds using the conversion typing rule.  For
+%     $s_1=\Prop$, we also have
+%     $\denotation{I}=\denotation{\Delta(A')}{I}$, also by
+%     the conversion typing rule, so the final condition for membership
+%     in $\interp[]{\Prop}$ also holds.
+  \item[\textbf{(CR 3):}] \hspace*{10pt} For \CRthree, if $\SN(A)$ and
+    $A'\rrtocbnnc A$ then $\SN(A')$ holds by Lemma
+    \ref{lemma:cbn-nc-sn}; the remaining conditions are immediate.
+%     $\CR{A}{I}$ hold, and if $A'\rrtocbnnc A$, then $\SN(A')$ holds by
+%     Lemma \ref{lemma:cbn-nc-sn} and $\CR{A'}{I}$ holds by the
+%     conversion typing rule.
+  \item[\textbf{(CR 4):}] \hspace*{10pt} If $A$ is a meaningless term
+    and $\SN(A)$, then $\CRnot{\dummy}$ holds by Lemma
+    \ref{lemma:cr-dummy} and $\dummy\in\Ui[0]\subseteq\Ui$ is
+    immediate.
+  \end{description}
+\end{myproof}
+\fi
+
+
+%% pi types
+\begin{lemma}
+  \label{lemma:pi}
+  Let $s_B\subtype s$ and either $s_B=\Prop$ or $s_A\subtype s$.
+  Further let $\tctypejdef$. If
+  $\pair{\sigma(A)}{\interp{A}}\in\interpd{s_A}$ and for all
+  $\pair{N}{I}\in\interpd{A}$ we have
+  $\pair{\sigma([N/x]B)}{\interp[\Delta,\dxform{I}]{B}}\in\interpd[]{s_B}$
+  then
+  $\pair{\sigma(\pitype{x}{A}{B})}{\interp{\pitype{x}{A}{B}}}\in\interpd[]{s}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  We have $\SN(\sigma(A))$ by definition of $\interpd[]{s_A}$. By
+  \CRfour\ for $A$ we have $\pair{\bot}{\dummy}\in\interpd{A}$, so by
+  assumption and by definition of $\interpd[]{s_B}$ we have and
+  $\SN([\sigma,\bot/x]B)$, and thus we have $\SN(B)$.  Hence we have
+  $\SN(\pitype{x}{A}{B})$.
+
+  We now show $\interp{\pitype{x}{A}{B}}\in\Ui$ for $s=\Type_i$ or for
+  $i=0$ and $s=\Prop$.  If $s_B=\Prop$ then, since by assumption $B$
+  is reducible at $\Prop$, we must have that
+  $\appstar{F}{\pair{N}{I}}=\dummy$ for all
+  $\pair{M}{F}\in\interp{\pitype{x}{A}{B}}$.  Thus
+  $\lamstarnot{p}{\appstar{F}{p}}=\dummy$ and so $F=\dummy$ by
+  definition, and we have
+  $\interp{\pitype{x}{A}{B}}\in\Ui[0]\subseteq\Ui$.  Otherwise by
+  assumption we have both $s_A\subtype s$ and $s_B\subtype s$, and so
+  by assumption and the definition of $\interpd[]{s_A}$ and
+  $\interpd[]{s_B}$ we have $\interpd{A}\in\Ui[j]$ and
+  $\interpd[\Delta,\dxform{I}]{B}\in\Ui[k]$ for all
+  $\pair{N}{I}\in\interpd{A}$, where $j,k\leq i$. Hence for all
+  $\pair{M}{F}\in\interpd{\pitype{x}{A}{B}}$ we have that $F$ is a
+  function whose domain and range is in $\Ui$, and the result is
+  immediate.
+
+  Finally, we show that $\CRnot{\interp{\pitype{x}{A}{B}}}$ holds:
+  \begin{description}
+  \item[\textbf{(CR 1):}] \hspace*{10pt} By \CRfour, we have
+    $\pair{\bot}{\dummy}\in\interpd{A}$, so if
+    $\pair{M}{F}\in\interp{\pitype{x}{A}{B}}$ then we have
+    $\pair{M\;\bot}{\appstar{F}{\dummy}}
+    \in\interpd[\Delta,\dxform{\dummy}]{B}$.  By \CRone\
+    for $B$ we have $\SN(M\;\bot)$ and hence $\SN(M)$.
+  \item[\textbf{(CR 2):}] \hspace*{10pt} If
+    $\pair{M}{F}\in\interpd{\pitype{x}{A}{B}}$ and $M\rrto M'$ then
+    for all $\pair{N}{I}\in\interpd{A}$ we have that
+    $\pair{M\;N}{\appstar{F}{\pair{N}{I}}}\in
+    \interp[\Delta,\dxform{I}]{B}$. By \CRtwo\ for $B$ we have
+    $\pair{M'\;N}{\appstar{F}{\pair{N}{I}}}\in
+    \interp[\Delta,\dxform{I}]{B}$, so
+    $\pair{M'}{F}\in\interp{\pitype{x}{A}{B}}$.
+  \item[\textbf{(CR 3):}] \hspace*{10pt} If $M'\rrtocbnnc M$ and
+    $\pair{M}{F}\in\interp{\pitype{x}{A}{B}}$, then for all
+    $\pair{N}{I}\in\interpd{A}$ we have that
+    $\pair{M\;N}{\appstar{F}{I}}\in\interpd[\Delta,\dxform{I}]{B}$.
+    It also follows that $M'\;N\rrtocbnnc M\;N$ by Lemma
+    \ref{lemma:cbn-nc-app}, and thus by \CRthree\ for $B$ we have
+    $\pair{M'\;N}{\appstar{F}{I}}\in\interpd[\Delta,\dxform{I}]{B}$,
+    and the desired result is immediate.
+  \item[\textbf{(CR 4):}] \hspace*{10pt} Let $M'$ be a meaningless
+    term such that $\SN(M')$. For all $\pair{N}{I}\in\interpd{A}$ we
+    have $\SN(N)$ by \CRone\ for $A$, and so $M'\;N$ is a meaningless
+    term with $\SN(M'\;N)$ by Lemma
+    \ref{lemma:meaningless-app-sn}. Thus
+    $\pair{M'\;N}{\dummy}\in\interpd[\Delta,\dxform{I}]{B}$ holds by
+    \CRfour\ for $B$. Since $\dummy=\appstar{\dummy}{I}$, the result
+    follows.
+  \end{description}
+\end{myproof}
+\fi
+
+
+%% inductive types
+\begin{lemma}
+  \label{lemma:ind-types}
+  Let $a:\pigamma{\Gammap}{\pigamma{\Gammaa}{s}}$, and let the context
+  $\Gammap,\Gammaa$, as well as all contexts $\Gammap,\Gammac$ for
+  constructors $c$ of $a$, be reducible relative to $\cdot$.  If
+  $\pair{\sigma(\vec{M},\vec{N})}{\interp{\vec{M},\vec{N}}}\in\interpd{\Gammap,\Gammaa}$
+  then
+  $\pair{\sigma(\ctorapp{a}{\vec{M}}{\vec{N}})}{\interp{\ctorapp{a}{\vec{M}}{\vec{N}}}}\in
+  \interp{s}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  By \CRone\ for $\Gammap,\Gammaa$ we have $\SN(\sigma(M_i))$ and
+  $\SN(\sigma(N_j))$ for all $i$ and $j$, and so
+  $\SN(\sigma(\ctorapp{a}{\vec{M}}{\vec{N}}))$. Also, if $s=\Prop$,
+  then we immediately have $I=\dummy$ for all
+  $\pair{M}{I}\in\interpd{\ctorapp{a}{\vec{M}}{\vec{N}}}$, so
+  $\interp{\ctorapp{a}{\vec{M}}{\vec{N}}}\in\Ui[0]$.  Otherwise
+  $s=\Type_i$, and the well-formedness rules for inductive types (see
+  Section \ref{sec:cic}) require that all of the types in $\Gammac$
+  for any constructor $c$ of $a$ to have type $s$. Thus if
+  $I=\pair{c}{\vec{I}}$ we have that each $I_j\in S_j$ for some
+  $S_j\in\Ui$, and it then follows that
+  $\interp{\ctorapp{a}{\vec{M}}{\vec{N}}}\in\Ui[i]$.
+
+  What remains is to prove
+  $\CRnot{\interpd{\ctorapp{a}{\vec{M}}{\vec{N}}}}$:
+  \begin{description}
+  \item[\textbf{(CR 1):}] \hspace*{10pt} Immediate.
+  \item[\textbf{(CR 2):}] \hspace*{10pt} Straightforward, as reduction
+    preserves $\SN$ and normal forms and because, if
+    $M'\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$ for $M\rrto M'$ then
+    $M\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$.
+  \item[\textbf{(CR 3):}] \hspace*{10pt} Assume that $M'\rrtocbnnc M$
+    and that $\pair{M}{I}\in\interpd{\ctorapp{a}{\vec{M}}{\vec{N}}}$.
+    By Lemma \ref{lemma:cbn-nc-sn}, we have $\SN(M')$. By Lemma
+    \ref{lemma:cbn-nc-whnf}, we have that
+    $M'\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$ implies
+    $M\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$, so the condition
+    \[
+    \exists\vec{I}\exists\vec{I'}.\;
+    \pair{(\vec{Q},\vec{R})}{(\vec{I},\vec{I'})}\in\interpd{\Gammac})
+    \]
+    holds because
+    $\pair{M}{I}\in\interpd{\ctorapp{a}{\vec{M}}{\vec{N}}}$.  The
+    remaining conditions are straightforward because $M'$ has the same
+    normal form as $M$.
+  \item[\textbf{(CR 4):}] \hspace*{10pt} Immediate because any
+    meaningless term $M'$ has no normal form of the form
+    $\ctorapp{c}{\vec{Q}}{\vec{R}}$, and so if $\SN(M')$ then
+    $\pair{M'}{\dummy}$ is in
+    $\interpd{\ctorapp{a}{\vec{M}}{\vec{N}}}$.
+  \end{description}
+\end{myproof}
+\fi
+
+
+%% bottom
+% \begin{lemma}
+%   \label{lemma:bottom}
+%   If $\pair{\sigma(A)}{\interp{A}}\in\interp[]{s}$ then
+%   $\pair{\bot}{\interp{\bot}}\in\interp{A}$.
+% \end{lemma}
+
+% \begin{myproof}
+%   Immediate by \CRfour.
+% \end{myproof}
+
+
+%% variables
+\begin{lemma}
+  \label{lemma:variables}
+  If $\tctypej{\Delta}{\sigma}{\Gamma'}$ and $\interp{x}$ is defined then
+  $\triple{\Gamma'}{\sigma(x)}{\interp{x}}\in\interpd{A}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  The assumption $\tctypej{\Delta}{\sigma}{\Gamma'}$ implies
+  $\triple{\Gamma'}{\sigma(x)}{\interp{x}}\in\interpd[\iargs{\Gamma_1}{\Delta_1}]{A}$
+  for some prefixes $\Gamma_1$ and $\Delta_1$ of $\Gamma$ and
+  $\Delta$, respectively, and
+  $\interpd[\iargs{\Gamma_1}{\Delta_1}]{A}=\interpd{A}$ by
+  Interpretation Weakening (Lemma \ref{lemma:weakening}).
+\end{myproof}
+\fi
+
+
+%% recursive variables
+\begin{lemma}
+  \label{lemma:recursive-variables}
+  If $\tctypej{\Delta}{\sigma}{\Gamma'}$ for
+  $\guform{|\vec{N}|}{\vec{x}}{\pigamma{\Gamma_u}{B}}\in\Gamma$, and
+  if $\vec{N},x_i$ are reducible at the types listed in $\Gamma_u$,
+  then
+  $\pair{\sigma(u)\;\vec{N}\;\sigma(x_i)}{\interp{u\;\vec{N}\;x_i}}\in\interpd{B}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  The assumption that $\tctypej{\Delta}{\sigma}{\Gamma'}$ and that the arguments
+  $\vec{N},x_i$ are reducible implies that $u\;\vec{N}\;x_i$ is
+  reducible relative to $\Delta_1$, as in the proof of Lemma
+  \ref{lemma:variables}. The result again follows by Interpretation
+  Weakening (Lemma \ref{lemma:weakening}).
+\end{myproof}
+\fi
+
+
+%% applications
+\begin{lemma}
+  \label{lemma:applications}
+  If $\pair{\sigma(M)}{\interp{M}}\in\interpd{\pitype{x}{A}{B}}$ and
+  $\pair{\sigma(N)}{\interp{N}}\in\interpd{A}$ then
+  $\pair{\sigma(M\;N)}{\interp{M\;N}}\in\interpd{[N/x]B}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  By hypothesis we immediately have
+  $\pair{\sigma(M\;N)}{\interp{M\;N}}\in
+  \interpd[\Delta,\dxform{\interp{N}}]{B}$, and the result
+  then follows by Interpretation Substitution (Lemma
+  \ref{lemma:substitution}).
+\end{myproof}
+\fi
+
+
+%% lambda-abstractions
+\begin{lemma}
+  \label{lemma:abstractions}
+  Let $A$ and $B$ be reducible at types $s_A$ and $s_B$, respectively.
+  If, for every $\pair{N}{I}\in\interpd{A}$, we have
+  $\pair{[\sigma,N/x](B)}{\interp[\Delta,\dxform{I}]{B}}\in\interpd[]{s}$ and
+  also $\pair{[\sigma,N/x]M}{\interp[\Delta,\dxform{I}]{M}}\in
+  \interpd[\Delta,\dxform{I}]{[\sigma,N/x]B}$, then
+  $\pair{\sigma(\lamabs{x}{A}{M})}{\interp{\lamabs{x}{A}{M}}}\in
+  \interpd{\pitype{x}{A}{B}}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  We must show that, for all $\pair{N}{I}\in\interpd{A}$, we have
+  $\pair{\sigma(\lamabs{x}{A}{M})\;N}{\interp[\Delta,\dxform{I}]{M}}
+  \in\interp[\Delta,\dxform{I}]{B}$. By the definition of
+  $\interpd[]{s_A}$ we have $\SN(A)$, and by \CRfour\ for $A$ we have
+  $\pair{\bot}{\dummy}\in\interpd{A}$, so by assumption and by \CRone\
+  for $B$ we have $\SN([\sigma,\bot/x]M)$ and thus $\SN(\sigma(M))$.
+  It is straightforward to see that $\sigma(\lamabs{x}{A}{M})$ is the
+  same as $\lamabs{x}{(\sigma(A))}{(\sigma(M))}$ and that
+  $[\sigma,N/x]M$ is the same as $[N/x](\sigma(M))$, and thus we have
+  $\sigma(\lamabs{x}{A}{M})\;N\rrtocbnnc [\sigma,N/x]M$. Hence, by
+  \CRthree\ for $B$, we have the desired result.
+\end{myproof}
+\fi
+
+
+%% constructors
+\begin{lemma}
+  \label{lemma:constructors}
+  Let the type $\ctorapp{a}{\vec{M}}{\vec{Q}}$ and the context
+  $\Gammap,\Gammac$ of arguments to constructor $c$ be reducible. If
+  $\pair{\sigma(\vec{M},\vec{N})}{\interp{\vec{M},\vec{N}}}\in\interpd{\Gammap,\Gammac}$
+  then $\ctorapp{c}{\vec{M}}{\vec{N}}$ is reducible at type
+  $\ctorapp{a}{\vec{M}}{\vec{Q}}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  By \CRone\ for the types in $\Gammac$, we have that
+  $\SN(\sigma(M_i))$ and $\SN(\sigma(N_j))$ for all $i$ and $j$. Thus
+  $\SN(\sigma(\ctorapp{c}{\vec{M}}{\vec{N}}))$.  For the third
+  condition in the interpretation of $a$, if
+  $\sigma(\ctorapp{c}{\vec{M}}{\vec{N}})\rrtostar\ctorapp{c}{\vec{M'}}{\vec{N'}}$
+  then we must have $\sigma(M_i)\rrtostar M_i'$ and
+  $\sigma(N_j)\rrtostar N_j'$ for all $i$ and $j$. By assumption and
+  by \CRtwo\ for the $A_i$ we then have that
+  $\pair{(\vec{M'},\vec{N'})}{\interp{\vec{M},\vec{N}}}\in\interpd{\Gammac}$.
+  Further, if $a$ is a predicative inductive type then we cannot have
+  $c:\Prop$, and we have
+  $\interp{\ctorapp{c}{\vec{M}}{\vec{N}}}=\pair{c}{\interp{\vec{N}}}$.
+  In contrast, if $a$ is an impredicative inductive type then
+  $c:\Prop$, so $\interp{\ctorapp{c}{\vec{M}}{\vec{N}}}=\dummy$.  It
+  is not possible for $\NF(\sigma(\ctorapp{c}{\vec{M}}{\vec{N}}))$ to
+  not start with $c$.
+\end{myproof}
+\fi
+
+
+%% pattern-matching
+\begin{lemma}
+  \label{lemma:pattern-matching}
+  Let
+  $\Mfun=\pmfun[ip]{u}{\Gammaarg}{\pc{\vec{c}}{\vec{\Gamma}}{\vec{M}}}$
+  have type $\Afun$, and let the context
+  $\Gammaarg,y:\ctorapp{a}{\vec{Q}}{\vec{R}},z:B$ be reducible with
+  respect to $\Delta$.  If $\tctypej{\Delta}{\sigma}{\Gamma'}$, and if
+  \[
+  \pair{\sigma_i(M_i)}{\interp[\Delta_i]{M_i}}\in\interpd[\Delta_i,\dxform{\interp[\Delta_i]{\ctorapp{c_i}{\vec{Q}}{\Gamma_i}}}]{B}
+  \]
+  holds for all $\Delta_i$ and $\sigma_i$ such that
+  $\tctypej[\Gamma_i']{\Delta_i}{\sigma_i}{\Gamma'}$, where $\Gamma_i'$ is
+  \[
+  \Gamma,\Gammaarg,\Gamma_i,\guform{|\Gammaarg|}{\Gamma_i}{\Afun},
+  \]
+  then $\pair{\sigma(\Mfun)}{\interp{\Mfun}}\in\interpd{A}$.
+\end{lemma}
+
+\iftechreport
+\begin{myproof}
+  For all
+  $\pair{(\vec{N},N)}{(\vec{I},I)}\in\interpd{\Gammaarg,x:\ctorapp{a}{\vec{Q}}{\vec{R}}}$,
+  we must show that $\pair{M}{I_M}$ is in
+  $\interpd[\Delta,\Gammaarg\mapsto\vec{I},\dxform{I}]{B}$ where
+  $M\equiv\sigma(\Mfun)\;\vec{N}\;N$ and
+  $I_M\equiv\appstar{\interp{\Mfun}}{(\vec{I},I)}$.  By \CRfour\ for
+  the types in $\Gammaarg$ and $\Gamma_i$ we can form $\Deltadi$ and
+  $\sigmadi$ such that that extend $\Delta$ and $\sigma$,
+  respectively, by mapping $u$ and the variables of the contexts
+  $\Gammaarg$ and $\Gamma_i$ to $\bot$ in $\sigmadi$ and $\dummy$ in
+  $\Deltadi$. Thus we have
+  $\pair{\sigmadi(M_i)}{\interp[\Deltadi]{M_i}}\in\interpd[\Deltadi,\dxform{\dummy}]{B}$,
+  so by \CRone\ for $B$ we have $\SN(\sigmadi(M_i))$ and hence
+  $\SN(\sigma(M_i))$. By \CRone\ for $\Gammaarg$ and
+  $\ctorapp{a}{\vec{Q}}{\vec{R}}$ we also have $\SN(\vec{N})$ and
+  $\SN(N)$. We now proceed by primary induction on $\NF(N)$ and by
+  secondary induction on $\size{N}$.
+
+  For the step case of the secondary induction, if $N\rrtocbnnc N'$
+  then $\size{N'}<\size{N}$, so by the inductive hypothesis we have
+  that
+  $\pair{\sigma(\Mfun)\;\vec{N}\;N'}{\appstar{\interp{\Mfun}}{\pair{(\vec{N},N)}{(\vec{I},I)}}}$
+  is in the required set, and the result follows by \CRthree\ for $B$.
+
+  For the base case of the secondary induction, if $N$ is a WHNF then
+  it is straightforward to see that it is either of the form
+  $\ctorapp{c_i}{\vec{Q}}{\vec{R'}}$ or it does not reduce to a term
+  of this form. In the latter case, the definition of
+  $\interpd{\Delta}{\ctorapp{a}{\vec{Q}}{\vec{R}}}$ ensures that
+  $I=\dummy$, and so the interpretation of $\Mfun$ return
+  $I_M=\dummy$.  In this case we also have that
+  $\sigma(\Mfun)\;\vec{N}\;N$ is a WHNF, and so is a meaningless
+  term. The desired result then follows by \CRfour\ for $B$.
+
+  In the former case, the definition of
+  $\interpd[]{\ctorapp{a}{\vec{Q}}{\vec{R}}}$ ensures that
+  $\pair{\vec{R'}}{\vec{I'}}\in\interpd{\Gammaci}$ for some
+  $\vec{I'}$, since $N\rrtostar N$. Thus we can form $\Delta'$ and
+  $\sigma'$ extend $\Delta$ and $\sigma$ by mapping $\Gammaarg$ to
+  $\vec{I}$ and $\vec{N}$, respectively, by mapping $\Gamma_i$ to
+  $\vec{I'}$ and $\vec{R'}$, respectively, and by mapping $u$ to
+  $\sigma(\Mfun)$ and $\interp{\Mfun}$, respectively.  We can conclude
+  $\tctypej[\Gamma_i']{\Delta'}{\sigma'}{\Gamma'}$ for $\Gamma_i'$ as above,
+  using the primary induction hypothesis and the fact that $\NF(R'_i)$
+  is a strict subterm of $\NF(N)$ to handle the mapping in $\Delta'$
+  for $u$.  Thus by assumption we have
+  $\pair{\sigma'(M_i)}{\interp[\Delta']{M_i}}\in\interpd[\Delta',\dxform{I_x}]{B}$
+  where $I_x=\interp[\Delta']{\ctorapp{c_i}{\vec{Q}}{\Gamma_i}}$.
+
+  If we know that $\interp[\Delta']{M_i}=I_M$ then the result follows
+  by \CRthree\ for $B$, as $\sigma(M)\rrtocbnnc\sigma'(M_i)$.  For
+  predicaitve pattern-matching functions, this is immediate by the
+  definition of $\interp{\Mfun}$ and by Interpretation Substitution
+  (Lemma \ref{lemma:substitution}) as $I=\pair{c_i}{\vec{I'}}$. For
+  impredicative pattern-matching functions with propositional return
+  type, we know by Proof Irrelevance (Lemma
+  \ref{lemma:proof-irrelevance}) that $\interp[\Delta']{M_j}=\dummy$
+  for all $j$, and thus $I_M=\dummy$ as well. Finally, for
+  impredicative pattern-matching functions with predicative return
+  type, we must have that $a$ has exactly one constructor that takes
+  only proof arguments (since there are no constructors $c_i$ for
+  empty inductive types). Thus, by Proof Irrelevance, each $I'_j$ has
+  only one possible value, $I'_j=\dummy$. This means there is only one
+  possible well-formed extension $\Delta'$ of $\Delta$ and we have
+  that $I_M$ is well-defined and $I_M=\interp[\Delta']{M_j}$.
+\end{myproof}
+\fi
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%% Summarized Proof Details for Conference Paper              %%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\else
+%
+Proof is by the same induction scheme as used to define
+$\interp{\cdot}$.  For reasons of space, we consider only a few of the
+more interesting cases, at a high level; the remaining cases are
+either straightforward, such as subtyping (by Lemma
+\ref{lemma:subtyping}), variables $x$, and recursive variables $u$
+(the latter two by well-formedness of $\Xi$), and/or are similar to
+previous approaches, such as the original proof by Girard
+\cite{girard-proofs-types}.
+% FIXME: cite tech report?
+% See the companion technical report
+% \cite{westbrook-techreport} for more details.
+
+If $M=\ctorapp{a}{\vec{M}}{\vec{N}}$, we know $A=s$ for some $s$, and
+we must prove $\triple{\Gamma'}{\sigma(M)}{\interp{M}}$ is in
+$\interp{s}$, meaning that $\SN(M)$, $\typej[\Gamma']{\sigma(M)}{s}$, and
+$\CR{\Gamma}{A}{I}$. The first is immediate by the tertiary IH and
+\CRone, the second follows by Substitution, and the third is
+straightforward for most of the conditions for reducibility
+candidates. For example, \CRtwo\ follows because, if $N\rrto N'$ and
+$N'\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$ then
+$N\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$. \CRfour\ follows because,
+if $N$ is stuck, then $N\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$ is not
+possible. The most difficult condition to show is \CRthree, which
+requires showing that, if $N'\rrtocbnnc N$ and
+$N'\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$ then
+$N\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$. Note that this is a much
+weaker property than Confluence. It follows because any reduction to a
+constructor application must eventually perform a CBN reduction step,
+and any non-CBN reduction step can always be commuted (to zero or more
+steps) after a CBN step.
+% if $\triple{\Gamma''}{N}{I}\in\interpd{M}$ and
+% $N'\rrtocbnnc N$ then $\triple{\Gamma''}{N'}{I}\in\interpd{M}$. This
+% requires showing that $N'\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$
+% implies $N\rrtostar\ctorapp{c}{\vec{Q}}{\vec{R}}$, which
+% holds because any sequence of reductions from $N'$ to
+% a constructor application must eventually reduce the top-level
+% redex that causes $N'$ to reduce to $N$, and any earlier
+% reductions can be commuted after this key reduction, yielding a
+% reduction from $N$.
+
+
+The other case we consider here is if $M$ is a pattern-matching
+function with pattern cases $M_i$ over type
+$\ctorapp{a}{\vec{N}}{\vec{Q}}$ with return type $B$.  Since the
+assumption $\typej{\Afun}{s}$ is part of the typing rule for $M$, we
+immediately have, by the tertiary IH, that the interpretations of $B$
+and of all the argument types are reducibility candidates.  If $a$ is
+impredicative, we first must show that $\interp{M}$ is well-defined,
+meaning all $M_i$ have the same interpretations for all valid
+extensions $\Xi,\dgform[\Gamma_i]{\vec{N}}{\vec{I}}$ of $\Xi$.  This follows
+by Proof Irrelevance, because either there is at most one pattern case
+$M_i$ and at most one possible sequence of $\vec{I}$, namely
+$I_j=\dummy$ for all $j$, or all possible interpretations of the $M_i$
+equal $\dummy$. We then must show that
+$\triple{\Delta'}{\Dsubst(M)\;\vec{R}\;R_0}{\appstar{\appstar{\interp{M}}{\vec{I}}}{I_0}}$
+is in $\interp{B}$ whenever $\triple{\Delta'}{R_j}{I_j}$ is in the
+interpretation of the appropriate argument type. This is shown by
+\CRthree, using induction on the number of CBN steps it takes to
+either reduce $R_0$ to a constructor application or a stuck term.
+This induction is possible since $\SN(R_0)$ follows by \CRone\ for
+$\ctorapp{a}{\vec{N}}{\vec{Q}}$.
+%
+\fi
+\end{myproof}
+
+
+\begin{corollary}(Strong Normalization)
+If $\typej{M}{A}$ then $\SN(M)$.
+\end{corollary}
+
+% \begin{myproof}
+%   By Lemma \ref{lemma:type-typing}, $\typej{A}{s}$ for some $s$, and
+%   since (as discussed above)
+%   $\ivtypej{\Gamma\mapsto\dummy}{\Gamma}$, Reducibility implies
+%   that
+%   $\triple{\Gamma}{A}{\interp[\Gamma\mapsto\dummy]{A}}\in\interpd[]{s}$.
+%   Thus, again by Reducibility,
+%   $\triple{\Gamma}{M}{\interp[\Gamma\mapsto\dummy]{M}}\in\interpd[]{A}$,
+%   and so, by \CRone, $\SN(M)$.
+% \end{myproof}
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+% \section{The Calculus of Nominal Inductive Constructions (CNIC)}
+% \label{sec:cnic}
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+% \section{Strong Normalization for CNIC}
+% \label{sec:cnic-sn}
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Related Work}
+\label{sec:related-work}
+
+There have been numerous proofs of SN for various forms of both the
+Calculus of Inductive Constructions (CiC) and the Calculus of
+Constructions without inductive types (CC). As discussed above, none
+has been extended to full CiC. Many of these proofs are based on the
+\emph{Candidates de Reducibilit\'{e}} of Girard
+\cite{girard-proofs-types}, or on a modified version called
+\emph{saturated sets}.  Under these approaches, each type is
+interpreted as a set of terms that satisfies some closure properties
+(such as properties \CRone\ through \CRfour\ above), which include
+strong normalization of the elements. The proof then proves the
+Reducibility Theorem, which states that each term is in the
+interpretation of its type, and SN follows.
+
+Using this approach, Luo \cite{luo90} proves SN for the Extended
+Calculus of Constructions (ECC), a version of CC with an impredicative
+universe ($\Prop$), a hierarchy of infinitely many predicative
+universes ($\Type_i$), and product types. This seems to be the
+only SN proof for a calculus with infinitely many universes, probably
+due to the non-uniformity problem discussed in the Introduction.
+Luo's proof defines an interpretation for each type construct, and
+then proves Reducibility. The interpretation only defined for
+types that are in weak head normal form, however. Thus Luo
+requires a complex and involved Quasi-Normalization theorem, which
+states that all terms can be reduced to a weak head normal form.
+
+Coquand and Gallier \cite{coquand90} adapt the saturated sets approach
+to work on typed sets of terms, yielding a proof of SN for CC with one
+universe. They call their interpretation a Kripke structure, as each
+type is interpreted with respect to a particular world. The
+interpretation of a type contains pairs $\pair{\Delta'}{M}$ of
+interpretation contexts $\Delta'$ that extend $\Delta$ and terms $M$
+such that $M$ is well-typed with respect to (the context associated
+with) $\Delta'$. This was the inspiration for including contexts
+$\Gamma$ in our triples $\triple{\Gamma}{M}{I}$.  Again, because of
+non-uniformity, however, it is unclear how to extend this approach to
+multiple universes. It is also interesting to consider how sets of
+typed terms would make our approach more difficult.
+
+Geuvers \cite{geuvers94} extends the saturated sets approach by
+defining two interpretations, one for terms and one for types.  The
+interpretation for terms maps a term to a substitution instance of
+that term, and Reducibility then requires only that the instance be in
+the interpretation of a related substitution instance of the type of
+the term. Geuvers then shows that this approach can be used to support
+CC with strong products and inductive kinds, but comments that it will
+probably not work with small inductive types like the natural numbers.
+
+Altenkirch \cite{altenkirch93} adapts the notion of saturated sets to
+be a semantic notion, using the saturated sets as the basis for a
+denotational idea called a \emph{CC-structure} and thus building a
+model of CC. Soundness of this model then implies SN of CC. Altenkirch
+then shows that this argument can be extended to handle inductive
+types.  In a similar manner, Goguen \cite{goguen94} proves SN by
+providing a typed operational semantics of terminating computations of
+a given type. He then shows that this semantics is sound for the
+syntactic type theory, i.e., that all well-typed terms have a
+corresponding terminating computation. This result is proved for CiC
+with with two universes, one predicative and one impredicative.
+
+Finally, Geuvers and Nederhof \cite{geuvers91} prove SN for CC without
+universes by mapping terms in this language into System
+$\mathrm{F}_{\omega}$. The proof for SN of System
+$\mathrm{F}_{\omega}$ uses saturated sets but is much simpler, because
+types are trivially strongly normalizing. It is not clear, however,
+that this approach could be adapted easily (without proving SN
+already) to extensions of CC.
+
+
+
+%%%%%%%%%%%%%%%%%%%
+%%%%% Section %%%%%
+%%%%%%%%%%%%%%%%%%%
+\section{Conclusion}
+\label{sec:conclusion}
+
+In this work, we have shown how to adapt the Logical Relations proof
+technique to prove strong normalization (SN) for the full Calculus of
+Inductive Constructions (CiC) with a cumulative predicative type
+hierarchy. The guiding principle that has allowed us to handle full
+CiC is \emph{uniformity}, meaning that our interpretation does not
+depend on whether a term is a type. One benefit of this is that our
+interpretation does not depend on confluence.  The key technical
+development that enables uniformity is to interpret types not as sets
+of terms but as sets of triples $\triple{\Gamma}{M}{I}$ of context $\Gamma$,
+terms $M$ that are well-typed under $\Gamma$, and valid
+interpretations $I$ of $M$. Closure conditions on the sets associated
+with types, for example that the sets be saturated sets, are handled
+simply by including only such sets as valid interpretations of types
+in the interpretations $\interpnod{\Prop}$ and $\interpnod{\Type_i}$ of
+universes. Surprisingly, the proof is actually very similar to the
+original proof given by Girard, with the proof of the closure
+conditions on interpretations of types being folded into the proof of
+Reducibility, leading to a simple and elegant proof.  In fact, the
+proof given by Girard can be seen as a special case of Uniform Logical
+Relations.
+
+
+As a final consideration, the interpretation we give can easily be
+extended to support a transfinite hierarchy of universes.  That is, we
+could support universes $\Type_{\alpha}$ for any ordinal $\alpha$. Of
+course, to define such a theory syntactically requires a notation of
+well-founded ordinals, such as the well-known notation based on
+$\phi$-functions for ordinals less than $\Gamma_0$ (see
+e.g.~\cite{gallier91}). Thus not only is Zermelo-Frankel set theory
+(ZF) proof-theoretically stronger than CiC --- since we have proved
+consistency of CiC in ZF --- but, if we view CiC as an
+ordinal operation that assigns to each $\alpha$ the proof-theoretic
+ordinal of CiC with up to $\alpha$ universes, then the ordinal of ZF
+is also larger then this function applied to $\alpha$ (as well as
+infinitely many fixed points of this function).
+%\footnote{ZF is known to have the same proof-theoretic strength as
+%  ZF.}
+See e.g.\ Coquand
+et al.\ \cite{coquand97} for more on proof-theoretic ordinals of type
+theory.
+
+It has been shown by Aczel \cite{aczel77}, however, that
+\emph{constructive} ZF (CZF), without the Axiom of the Excluded
+Middle, can be encoded in CiC, and so the proof-theoretic strength of
+CZF is no more than that of CiC. Note that our intperpretation
+critically relies on Excluded Middle to define the interpretations
+of inductive types. If we add excluded middle for
+each sort $s$ ($EM_s$) to CiC, then the work of Werner \cite{werner97}
+shows that full ZF can be encoded, where excluded middle for sort $s$ has
+the following type:\footnote{Werner actually uses $EM_{\Prop}$ along
+  with the Type-Theoretical Description Axioms at each sort $s$
+  ($TTDA_s$), but the author has verified in the Coq proof assistant
+  that $EM_s$ implies $TTDA_s$.}
+\[
+\pitype{A}{s}{A +_s (A \to \mathsf{False})}
+\]
+Here $\mathsf{False}$ is the empty inductive type and $+_i$ denotes
+the inductive type for disjunction in sort $s$.  In fact, Werner shows
+that ZF with $i$ inaccessible cardinals ($\ZFi$) can be encoded in CiC
+with $EM_{\Type_{i+2}}$, where an \emph{inaccessible cardinal} in ZF
+is essentially a set that is so big that it includes a whole model of
+ZF (and thus \ZFi[i+1] is guaranteed to be proof-theoretically
+stronger than \ZFi).  Note that, although it is possible to interpret
+$EM_{\Prop}$ as $\dummy$ in our construction (because of Proof
+Irrelevance), it is not possible to interpret $EM_{\Type_i}$ since,
+for some types $A$, neither $A$ nor its negation is inhabited.  This
+is good, because, by the above and by G\"{o}del's Second
+Incompleteness Theorem, defining an interpretation that did allow this
+in ZF would only be possible if ZF is inconsistent.  In this light, we can
+see that (predicative) excluded middle is in fact a very powerful
+axiom.
+
+
+% use section* for acknowledgement
+\section*{Acknowledgments}
+The author would like to thank Andreas Abel for spotting an important
+bug, Chris Casinghino and Peter Hancock for helpful discussions, and
+the past anonymous reviewers who caught a number of bugs and omissions
+in previous versions of this paper.
+
+
+% bibliography
+\bibliographystyle{plain}
+\bibliography{bib}
+
+% that's all folks
+\end{document}
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% End: 
