@@ -7,24 +7,24 @@ Load indtype.
 
 Definition level := nat.
 
-Definition IndInfoH (T : Set) :=
-  (level * (list ((list T) * (list (list T * list T)))))%type.
-
 Inductive Term : Set :=
-| Sort : level -> Term
+| Prp : Term
+| Tp : level -> Term
 | Pi : Term -> Term -> Term
 | IndType : IndInfo -> Term
 | Var : nat -> Term
 | App : Term -> Term -> Term
 | Lam : Term -> Term -> Term
 | Ctor : IndInfo -> nat -> Term
-| Elim : IndInfo -> Term
-with TermList :=
-| TL_nil : TermList
-| TL_cons : TermList -> Term -> TermList
+| Elim : IndInfo -> nat -> Term -> (nat -> TermOpt) -> Term
 with IndInfo :=
-| MkIndInfo : Term -> TermList -> IndInfo
+| MkIndInfo : Term -> (nat -> TermOpt) -> IndInfo
+with TermOpt :=
+| SomeTerm : Term -> TermOpt
+| NoTerm : TermOpt
 .
+
+Definition TermMSeq := nat -> TermOpt.
 
 (* Definition Ctx : Set := list Term. *)
 (* Definition Ctx : Set := TermList. *)
@@ -32,6 +32,7 @@ with IndInfo :=
 
 (*** operations on my fake lists (stupid Coq) ***)
 
+(*
 Fixpoint TL_Len (l : TermList) :=
   match l with
     | TL_nil => 0
@@ -43,34 +44,38 @@ Fixpoint TL_app (l1 l2 : TermList) :=
     | TL_nil => l1
     | TL_cons l2' M => TL_cons (TL_app l1 l2') M
   end.
+*)
 
-Fixpoint nth_or_fail_TL (n : nat) (l : TermList) : Term + { TL_Len l <= n } :=
-  match n as n', l as l' return Term + { TL_Len l' <= n' } with
-    | n, TL_nil => inright _ (le_O_n n)
-    | 0, TL_cons _ M => inleft _ M
-    | (S n'), (TL_cons l' _) =>
-      match nth_or_fail_TL n' l' with
+Fixpoint nth_or_fail (n : nat) (l : list Term) : Term + { length l <= n } :=
+  match n as n', l as l' return Term + { length l' <= n' } with
+    | n, nil => inright _ (le_O_n n)
+    | 0, M :: _ => inleft _ M
+    | (S n'), (_ :: l') =>
+      match nth_or_fail n' l' with
         | inleft M => inleft _ M
         | inright pf => inright _ (le_n_S _ _ pf)
       end
   end.
 
-Inductive isNth_TL (T : Term) : nat -> TermList -> Set :=
-| isNth_TL_base (l : TermList) : isNth_TL T 0 (TL_cons l T)
-| isNth_TL_cons (n : nat) (T' : Term) (l : TermList)
-  : isNth_TL T n l -> isNth_TL T (S n) (TL_cons l T').
+Inductive isNth (T : Term) : nat -> list Term -> Set :=
+| isNth_TL_base (l : list Term) : isNth T 0 (T :: l)
+| isNth_TL_cons (n : nat) (T' : Term) (l : list Term)
+  : isNth T n l -> isNth T (S n) (T' :: l).
 
 
 (*** helper definitions to build up terms ***)
 
+(*
 Fixpoint apply (M : Term) (l : TermList) {struct l} : Term :=
   match l with
     | TL_nil => M
     | TL_cons l' N => App (apply M l') N
   end.
+*)
 
-
-(*** helper definitions for variable occurrences ***)
+(***
+ *** helper definitions for variable occurrences
+ ***)
 
 Inductive occurs (n : nat) : Term -> Set :=
 (* no occurrences for Sort *)
@@ -85,21 +90,27 @@ Inductive occurs (n : nat) : Term -> Set :=
 | OccursLam2 (A M : Term) : occurs (S n) M -> occurs n (Lam A M)
 | OccursCtor (info : IndInfo) (i : nat)
   : occursInfo n info -> occurs n (Ctor info i)
-| OccursElim (info : IndInfo) : occursInfo n info -> occurs n (Elim info)
-with occursTermList (n : nat) : TermList -> Set :=
-| OccursCons1 (M : Term) (l : TermList) :
-  occurs n M -> occursTermList n (TL_cons l M)
-| OccursCons2 (M : Term) (l : TermList) :
-  occursTermList n l -> occursTermList n (TL_cons l M)
+| OccursElim1 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : occursInfo n info -> occurs n (Elim info i P patts)
+| OccursElim2 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : occurs n P -> occurs n (Elim info i P patts)
+| OccursElim3 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : occursMSeq n patts -> occurs n (Elim info i P patts)
+with occursMSeq (n : nat) : TermMSeq -> Set :=
+| OccursSeq (patts : TermMSeq) (j : nat)
+  : occursOpt n (patts j) -> occursMSeq n patts
+with occursOpt (n : nat) : TermOpt -> Set :=
+| OccursOpt (M : Term) : occurs n M -> occursOpt n (SomeTerm M)
 with occursInfo (n : nat) : IndInfo -> Set :=
-| OccursMkIndInfo1 (kind : Term) (ctorTypes : TermList)
+| OccursMkIndInfo1 (kind : Term) (ctorTypes : TermMSeq)
   : occurs n kind -> occursInfo n (MkIndInfo kind ctorTypes)
-| OccursMkIndInfo2 (kind : Term) (ctorTypes : TermList)
-  : occursTermList n ctorTypes -> occursInfo n (MkIndInfo kind ctorTypes)
+| OccursMkIndInfo2 (kind : Term) (ctorTypes : TermMSeq)
+  : occursMSeq n ctorTypes -> occursInfo n (MkIndInfo kind ctorTypes)
 .
 
 Inductive notOccurs (n : nat) : Term -> Set :=
-| NotOccursSort (i : nat) : notOccurs n (Sort i)
+| NotOccursPrp (i : nat) : notOccurs n Prp
+| NotOccursTp (i : nat) : notOccurs n (Tp i)
 | NotOccursPi (A B : Term)
   : notOccurs n A -> notOccurs (S n) B -> notOccurs n (Pi A B)
 | NotOccursIndType (info : IndInfo)
@@ -111,50 +122,65 @@ Inductive notOccurs (n : nat) : Term -> Set :=
   : notOccurs n A -> notOccurs (S n) M -> notOccurs n (Lam A M)
 | NotOccursCtor (info : IndInfo) (i : nat)
   : notOccursInfo n info -> notOccurs n (Ctor info i)
-| NotOccursElim (info : IndInfo)
-  : notOccursInfo n info -> notOccurs n (Elim info)
-with notOccursTermList (n : nat) : TermList -> Set :=
-| NotOccursNil : notOccursTermList n TL_nil
-| NotOccursCons (M : Term) (l : TermList) :
-  notOccurs n M -> notOccursTermList n l -> notOccursTermList n (TL_cons l M)
+| NotOccursElim (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : notOccursInfo n info -> notOccurs n P -> notOccursMSeq n patts ->
+    notOccurs n (Elim info i P patts)
+with notOccursTermOpt (n : nat) : TermOpt -> Set :=
+| NotOccursNoTerm : notOccursTermOpt n NoTerm
+| NotOccursSomeTerm (M : Term) :
+  notOccurs n M -> notOccursTermOpt n (SomeTerm M)
+with notOccursMSeq (n : nat) : TermMSeq -> Set :=
+| NotOccursMSeq (seq : TermMSeq)
+  : (forall (i : nat), notOccursTermOpt n (seq i)) -> notOccursMSeq n seq
 with notOccursInfo (n : nat) : IndInfo -> Set :=
-| NotOccursMkIndInfo (kind : Term) (ctorTypes : TermList)
-  : notOccurs n kind -> notOccursTermList n ctorTypes ->
+| NotOccursMkIndInfo (kind : Term) (ctorTypes : TermMSeq)
+  : notOccurs n kind -> notOccursMSeq n ctorTypes ->
     notOccursInfo n (MkIndInfo kind ctorTypes)
 .
 
 
 (*** strict positivity for inductive types ***)
 
-(* Inductive types are given as a pair (kind, ctorType) of the kind of
- * the inductive type constructor itself and a list of the types of the
- * constructors. To be well-formed, kind must be of the form
- * (x1:A1) -> ... -> (xn:An) -> (Type i) such that there is some j such
- * that each A has type (Type j) and, further, j=i when i is not 0.
- * Each type in ctorType must then have the form
- * (x1:B1) -> ... -> (xm:Bm) -> X M1 .. Mn, where X is deBruijn index
- * 0 outside the binding for x1, where each B has type (Type j) for
- * the same j given above, and where each M has the corresponding A type
- * in kind. Further, we require that there be some l <= m such that all
- * Bi for i<=l so not contain X free, while all the remaining Bi have
- * the form (y1:C1) -> ... -> (yp:Cp) -> X N1 .. Nn where none of the C's
- * have X free. This is called "strict positivitiy". Since the typing
- * constraints mentioned above depend on typing, which is formalized below,
- * we only formalize strict positivity now; this essentially means that
- * strict positivity can be viewed as a syntactic restriction on
- * inductive types.
+(* Inductive types are given as a pair (kind, ctorTypes) of the kind
+   of the inductive type constructor itself and a sequence of the
+   types of the constructors. To be well-formed, kind must be of the
+   form (x1:A1) -> ... -> (xn:An) -> s such that each Ai has sort si
+   and, if s is (Tp j), then each Ai has type (Tp j). Each type in
+   ctorTypes must be (x1:B1) -> ... -> (xm:Bm) -> X M1 .. Mn, where: X
+   is deBruijn index 0 outside the binding for x1; each Bi has the
+   same type (Tp j) as in the kind, or any sort sj for impredicative
+   types; and where each M has the corresponding A type in kind.
+
+   Each Bi must also be strictly positive in X, meaning that, if it
+   contains X, it has the form (y1:C1) -> ... -> (yp:Cp) -> X N1 .. Nn
+   where none of the C's or N's have X free. Note that, as an
+   additional technical requirement to simplify the proofs later on,
+   we also require that any yi whose type Ci does contain X (in the
+   above form) does not occur in any later C's or in any of the N's.
+   This should in fact always hold anyway for strictly positive types,
+   since there is nothing in scope that has a type which refers to X,
+   the return type of yi, and thus any later term containing y would
+   have to mention the type of yi, which would contain X, which is
+   disallowed by positivity. We do not prove this, however,
+
+   The typing constraints mentioned above are formalized below, after
+   typing is formalized. We only formalize strict positivity now.
  *)
 
 
-(* captures the fact that a term is X M1 .. Mn for some arguments Mi *)
+(* Captures the fact that a term is X M1 .. Mn for some arguments Mi
+   that do not contain X free.
+ *)
 Inductive isXApp (n : nat) : Term -> Set :=
   | isXAppBase : isXApp n (Var n) 
-  | isXAppStep (M N : Term) : isXApp n M -> isXApp n (App M N)
+  | isXAppStep (M N : Term) :
+    isXApp n M -> notOccurs n N -> isXApp n (App M N)
 . 
 
-(* defines positivity for recursive argument types, meaning that that
- * the type has type have the form (y1:C1) -> ... -> (yp:Cp) -> X N1 .. Nn
- * where none of the C's have X free. *)
+(* Defines positivity for recursive argument types, meaning that the
+   type has the form (y1:C1) -> ... -> (yp:Cp) -> X N1 .. Nn where
+   none of the C's have X free.
+ *)
 Inductive positiveArg (n : nat) : Term -> Set :=
 | PosArg (A B : Term)
   : notOccurs n A -> positiveArg (S n) B -> positiveArg n (Pi A B)
@@ -162,24 +188,18 @@ Inductive positiveArg (n : nat) : Term -> Set :=
 .
 
 
-(* defines constructor types that are strictly positive for deBruijn
- * index n and where all remaining argument types are recursive *)
-Inductive positive2 (n : nat) : Term -> Set :=
-| Pos2 (A B : Term)
-  : positiveArg n A -> positive2 (S n) B -> positive2 n (Pi A B)
-| Pos2end (A : Term) : isXApp n A -> positive2 n A
+(* Defines constructor types that are strictly positive for deBruijn
+   index n.
+ *)
+Inductive positiveN (n : nat) : Term -> Set :=
+| Positive_Rec (A B : Term)
+  : positiveArg n A -> positiveN (S n) B -> positiveN n (Pi A B)
+| Positive_NonRec (A B : Term)
+  : notOccurs n A -> positiveN (S n) B -> positiveN n (Pi A B)
+| Positive_End (A : Term) : isXApp n A -> positiveN n A
 .
 
-(* defines constructor types that are strictly positive for deBruijn
- * index n while we are still allowed to have non-recursive argument
- * types *)
-Inductive positive1 (n : nat) : Term -> Set :=
-| Pos1 (A B : Term)
-  : notOccurs n A -> positive1 (S n) B -> positive1 n (Pi A B)
-| Pos1end (A : Term) : positive2 n A -> positive1 n A
-.
-
-Definition positive := positive1 0.
+Definition positive := positiveN 0.
 
 
 
@@ -189,7 +209,8 @@ Definition positive := positive1 0.
  * number of variable bindings under which we have traversed so far *)
 Fixpoint lift (n k : nat) (M : Term) {struct M} : Term :=
   match M with
-    | Sort i => Sort i
+    | Prp => Prp
+    | Tp i => Tp i
     | Pi A B => Pi (lift n k A) (lift (S n) k B)
     | IndType info => IndType (liftIndInfo n k info)
     | Var i =>
@@ -200,30 +221,40 @@ Fixpoint lift (n k : nat) (M : Term) {struct M} : Term :=
     | App M1 M2 => App (lift n k M1) (lift n k M2)
     | Lam A M1 => Lam (lift n k A) (lift (S n) k M1)
     | Ctor info i => Ctor (liftIndInfo n k info) i
-    | Elim info => Elim (liftIndInfo n k info)
+    | Elim info i P patts =>
+      Elim (liftIndInfo n k info) i (lift n k P)
+      (fun i => liftOpt n k (patts i))
   end
-with liftTermList (n k : nat) (l : TermList) :=
-  match l with
-    | TL_nil => TL_nil
-    | TL_cons l' M => TL_cons (liftTermList n k l') (lift n k M)
+with liftOpt (n k : nat) (M_opt : TermOpt) {struct M_opt} :=
+  match M_opt with
+    | SomeTerm M => SomeTerm (lift n k M)
+    | NoTerm => NoTerm
   end
-with liftIndInfo (n k : nat) (info : IndInfo) :=
+with liftIndInfo (n k : nat) (info : IndInfo) {struct info} :=
   match info with
-    | MkIndInfo sort ctors => MkIndInfo (lift n k sort) (liftTermList n k ctors)
+    | MkIndInfo sort ctors =>
+      MkIndInfo (lift n k sort) (fun i => liftOpt n k (ctors i))
   end
   .
 
+(* Grr, Coq cannot handle liftMSeq in the above mutal definitions... *)
+Definition liftMSeq (n k : nat) (seq : TermMSeq) :=
+  fun i => liftOpt n k (seq i).
 
-Fixpoint substH (n : nat) (s : TermList) (M : Term) {struct M} : Term :=
+
+Definition Subst := list Term.
+
+Fixpoint substH (n : nat) (s : Subst) (M : Term) {struct M} : Term :=
   match M with
-    | Sort i => Sort i
+    | Prp => Prp
+    | Tp i => Tp i
     | Pi A B => Pi (substH n s A) (substH (S n) s B)
     | IndType info => IndType (substIndInfo n s info)
     | Var i =>
       match le_lt_dec n i with
         | right _ => Var i (* case: i < n *)
         | left _ => (* case: i >= n *)
-          match nth_or_fail_TL (i - n) s with
+          match nth_or_fail (i - n) s with
             | inleft N => lift 0 n N
             | _ => Var (i + n)
           end
@@ -231,25 +262,32 @@ Fixpoint substH (n : nat) (s : TermList) (M : Term) {struct M} : Term :=
     | App M1 M2 => App (substH n s M1) (substH n s M2)
     | Lam A M1 => Lam (substH n s A) (substH (S n) s M1)
     | Ctor info i => Ctor (substIndInfo n s info) i
-    | Elim info => Elim (substIndInfo n s info)
+    | Elim info i P patts =>
+      Elim (substIndInfo n s info) i (substH n s P)
+      (fun i => substOpt n s (patts i))
   end
-with substTermList (n : nat) (s : TermList) (l : TermList) :=
-  match l with
-    | TL_nil => TL_nil
-    | TL_cons l' M => TL_cons (substTermList n s l') (substH n s M)
+with substOpt (n : nat) (s : Subst) (M_opt : TermOpt) :=
+  match M_opt with
+    | SomeTerm M => SomeTerm (substH n s M)
+    | NoTerm => NoTerm
   end
-with substIndInfo (n : nat) (s : TermList) (info : IndInfo) :=
+with substIndInfo (n : nat) (s : Subst) (info : IndInfo) :=
   match info with
     | MkIndInfo sort ctorTypes =>
-      MkIndInfo (substH n s sort) (substTermList n s ctorTypes)
+      MkIndInfo (substH n s sort) (fun i => substOpt n s (ctorTypes i))
   end
 .
 
-Definition subst (s : TermList) (M : Term) := substH 0 s M.
-Definition substOne (N M : Term) := substH 0 (TL_cons TL_nil N) M.
+Definition substMSeq (n : nat) (s : Subst) (seq : TermMSeq) :=
+  (fun i => substOpt n s (seq i)).
+
+Definition subst (s : Subst) (M : Term) := substH 0 s M.
+Definition substOne (N M : Term) := substH 0 (N :: nil) M.
 
 
-(*** convertability ***)
+(***
+ *** convertability
+ ***)
 
 (* The complicated thing here is to apply recursive eliminators. If
    the inductive type represented by "info" has n constructors and m
