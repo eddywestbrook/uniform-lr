@@ -304,7 +304,7 @@ Definition substOne (N M : Term) := substH 0 (N :: nil) M.
    argumens for constructor ci.
 *)
 
-FIXME HERE
+FIXME HERE:
 
 
 (* README: we assume there is some "ambient" ctx and an argCtx for the
