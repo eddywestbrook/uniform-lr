@@ -11,17 +11,23 @@ Inductive Term : Set :=
 | Prp : Term
 | Tp : level -> Term
 | Pi : Term -> Term -> Term
-| IndType : IndInfo -> Term
+| IndType : IndInfo -> TermList -> Term
 | Var : nat -> Term
 | App : Term -> Term -> Term
 | Lam : Term -> Term -> Term
-| Ctor : IndInfo -> nat -> Term
-| Elim : IndInfo -> nat -> Term -> (nat -> TermOpt) -> Term
+| CtorApp : IndInfo -> nat -> TermList -> Term
+| Elim : ElimInfo -> TermList -> Term -> Term
 with IndInfo :=
 | MkIndInfo : Term -> (nat -> TermOpt) -> IndInfo
+with ElimInfo :=
+| MkElimInfo : IndInfo -> nat -> Term -> (nat -> TermOpt) -> ElimInfo
 with TermOpt :=
 | SomeTerm : Term -> TermOpt
 | NoTerm : TermOpt
+with TermList :=
+| TL_nil : TermList
+(* README: TermLists cons to the right *)
+| TL_cons : TermList -> Term -> TermList
 .
 
 Definition TermMSeq := nat -> TermOpt.
@@ -30,13 +36,14 @@ Definition TermMSeq := nat -> TermOpt.
 (* Definition Ctx : Set := TermList. *)
 
 
-(*** operations on my fake lists (stupid Coq) ***)
+(***
+ *** operations on my fake lists (stupid Coq)
+ ***)
 
-(*
-Fixpoint TL_Len (l : TermList) :=
+Fixpoint TL_len (l : TermList) :=
   match l with
     | TL_nil => 0
-    | TL_cons l' _ => S (TL_Len l')
+    | TL_cons l' _ => S (TL_len l')
   end.
 
 Fixpoint TL_app (l1 l2 : TermList) :=
@@ -44,34 +51,71 @@ Fixpoint TL_app (l1 l2 : TermList) :=
     | TL_nil => l1
     | TL_cons l2' M => TL_cons (TL_app l1 l2') M
   end.
-*)
 
-Fixpoint nth_or_fail (n : nat) (l : list Term) : Term + { length l <= n } :=
-  match n as n', l as l' return Term + { length l' <= n' } with
-    | n, nil => inright _ (le_O_n n)
-    | 0, M :: _ => inleft _ M
-    | (S n'), (_ :: l') =>
-      match nth_or_fail n' l' with
+Fixpoint TL_nth_or_fail (n : nat) (l : TermList) : Term + { TL_len l <= n } :=
+  match n as n', l as l' return Term + { TL_len l' <= n' } with
+    | n, TL_nil => inright _ (le_O_n n)
+    | 0, TL_cons _ M => inleft _ M
+    | (S n'), (TL_cons l' _) =>
+      match TL_nth_or_fail n' l' with
         | inleft M => inleft _ M
         | inright pf => inright _ (le_n_S _ _ pf)
       end
   end.
 
-Inductive isNth (T : Term) : nat -> list Term -> Set :=
-| isNth_TL_base (l : list Term) : isNth T 0 (T :: l)
-| isNth_TL_cons (n : nat) (T' : Term) (l : list Term)
-  : isNth T n l -> isNth T (S n) (T' :: l).
+Inductive TL_isNth (T : Term) : nat -> TermList -> Set :=
+| isNth_TL_base (l : TermList) : TL_isNth T 0 (TL_cons l T)
+| isNth_TL_cons (n : nat) (T' : Term) (l : TermList)
+  : TL_isNth T n l -> TL_isNth T (S n) (TL_cons l T').
 
 
-(*** helper definitions to build up terms ***)
+(***
+ *** Helper definitions for manipulating terms
+ ***)
 
-(*
 Fixpoint apply (M : Term) (l : TermList) {struct l} : Term :=
   match l with
     | TL_nil => M
     | TL_cons l' N => App (apply M l') N
   end.
-*)
+
+Definition apply1opt (M : Term) (Nopt : TermOpt) : Term :=
+  match Nopt with
+    | NoTerm => M
+    | SomeTerm N => App M N
+  end.
+
+Fixpoint piMulti (As : TermList) (B : Term) : Term :=
+  match As with
+    | TL_nil => B
+    | TL_cons As' An => piMulti As' (Pi An B)
+  end.
+
+(* Pattern-match on a term of the form (M N1 .. Nn) and return a pair
+   of (M, N1 .. Nn)
+ *)
+Fixpoint matchApply (M : Term) : Term * TermList :=
+  match M with
+    | App M1 M2 => (fst (matchApply M1), TL_cons (snd (matchApply M1)) M2)
+    | _ => (M, TL_nil)
+  end.
+
+(* Match a term of the form (x1:A1) -> .. -> (xn:An) -> M (N1 .. Nm) and
+   return (As ++ A1 .. An, M, N1 .. Nm)
+ *)
+Fixpoint matchPiApplyH (As : TermList) (M : Term)
+  : TermList * (Term * TermList) :=
+  match M with
+    | Pi A B => matchPiApplyH (TL_cons As A) B
+    | _ => (As, matchApply M)
+  end.
+
+Definition matchPiApply (M : Term) := matchPiApplyH TL_nil M.
+Definition matchPiApply_Pis (M : Term) := fst (matchPiApply M).
+Definition matchPiApply_head (M : Term) := fst (snd (matchPiApply M)).
+Definition matchPiApply_args (M : Term) := snd (snd (matchPiApply M)).
+
+
 
 (***
  *** helper definitions for variable occurrences
@@ -81,24 +125,33 @@ Inductive occurs (n : nat) : Term -> Set :=
 (* no occurrences for Sort *)
 | OccursPi1 (A B : Term) : occurs n A -> occurs n (Pi A B)
 | OccursPi2 (A B : Term) : occurs (S n) B -> occurs n (Pi A B)
-| OccursIndType (info : IndInfo)
-  : occursInfo n info -> occurs n (IndType info)
+| OccursIndType1 (info : IndInfo) (params : TermList)
+  : occursInfo n info -> occurs n (IndType info params)
+| OccursIndType2 (info : IndInfo) (params : TermList)
+  : occursList n params -> occurs n (IndType info params)
 | OccursVar : occurs n (Var n)
 | OccursApp1 (M N : Term) : occurs n M -> occurs n (App M N)
 | OccursApp2 (M N : Term) : occurs n N -> occurs n (App M N)
 | OccursLam1 (A M : Term) : occurs n A -> occurs n (Lam A M)
 | OccursLam2 (A M : Term) : occurs (S n) M -> occurs n (Lam A M)
-| OccursCtor (info : IndInfo) (i : nat)
-  : occursInfo n info -> occurs n (Ctor info i)
-| OccursElim1 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
-  : occursInfo n info -> occurs n (Elim info i P patts)
-| OccursElim2 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
-  : occurs n P -> occurs n (Elim info i P patts)
-| OccursElim3 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
-  : occursMSeq n patts -> occurs n (Elim info i P patts)
+| OccursCtorApp1 (info : IndInfo) (i : nat) (params : TermList)
+  : occursInfo n info -> occurs n (CtorApp info i params)
+| OccursCtorApp2 (info : IndInfo) (i : nat) (params : TermList)
+  : occursList n params -> occurs n (CtorApp info i params)
+| OccursElim1 (einfo : ElimInfo) (params : TermList) (scrut : Term)
+  : occursElimInfo n einfo -> occurs n (Elim einfo params scrut)
+| OccursElim2 (einfo : ElimInfo) (params : TermList) (scrut : Term)
+  : occursList n params -> occurs n (Elim einfo params scrut)
+| OccursElim3 (einfo : ElimInfo) (params : TermList) (scrut : Term)
+  : occurs n scrut -> occurs n (Elim einfo params scrut)
 with occursMSeq (n : nat) : TermMSeq -> Set :=
 | OccursSeq (patts : TermMSeq) (j : nat)
   : occursOpt n (patts j) -> occursMSeq n patts
+with occursList (n : nat) : TermList -> Set :=
+| OccursListBase (l : TermList) (M : Term)
+  : occurs n M -> occursList n (TL_cons l M)
+| OccursListCons (l : TermList) (M : Term)
+  : occursList n l -> occursList n (TL_cons l M)
 with occursOpt (n : nat) : TermOpt -> Set :=
 | OccursOpt (M : Term) : occurs n M -> occursOpt n (SomeTerm M)
 with occursInfo (n : nat) : IndInfo -> Set :=
@@ -106,6 +159,13 @@ with occursInfo (n : nat) : IndInfo -> Set :=
   : occurs n kind -> occursInfo n (MkIndInfo kind ctorTypes)
 | OccursMkIndInfo2 (kind : Term) (ctorTypes : TermMSeq)
   : occursMSeq n ctorTypes -> occursInfo n (MkIndInfo kind ctorTypes)
+with occursElimInfo (n : nat) : ElimInfo -> Set :=
+| OccursMkElimInfo1 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : occursInfo n info -> occursElimInfo n (MkElimInfo info i P patts)
+| OccursMkElimInfo2 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : occurs n P -> occursElimInfo n (MkElimInfo info i P patts)
+| OccursMkElimInfo3 (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : occursMSeq n patts -> occursElimInfo n (MkElimInfo info i P patts)
 .
 
 Inductive notOccurs (n : nat) : Term -> Set :=
@@ -113,18 +173,23 @@ Inductive notOccurs (n : nat) : Term -> Set :=
 | NotOccursTp (i : nat) : notOccurs n (Tp i)
 | NotOccursPi (A B : Term)
   : notOccurs n A -> notOccurs (S n) B -> notOccurs n (Pi A B)
-| NotOccursIndType (info : IndInfo)
-  : notOccursInfo n info -> notOccurs n (IndType info)
+| NotOccursIndType (info : IndInfo) (params : TermList)
+  : notOccursInfo n info -> notOccursList n params ->
+    notOccurs n (IndType info params)
 | NotOccursVar (m : nat) : (n <> m) -> notOccurs n (Var m)
 | NotOccursApp (M N : Term)
   : notOccurs n M -> notOccurs n N -> notOccurs n (App M N)
 | NotOccursLam (A M : Term)
   : notOccurs n A -> notOccurs (S n) M -> notOccurs n (Lam A M)
-| NotOccursCtor (info : IndInfo) (i : nat)
-  : notOccursInfo n info -> notOccurs n (Ctor info i)
-| NotOccursElim (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
-  : notOccursInfo n info -> notOccurs n P -> notOccursMSeq n patts ->
-    notOccurs n (Elim info i P patts)
+| NotOccursCtorApp (info : IndInfo) (i : nat) (params : TermList)
+  : notOccursInfo n info -> notOccurs n (CtorApp info i params)
+| NotOccursElim (einfo : ElimInfo) (params : TermList) (scrut : Term)
+  : notOccursElimInfo n einfo -> notOccursList n params -> notOccurs n scrut ->
+    notOccurs n (Elim einfo params scrut)
+with notOccursList (n : nat) : TermList -> Set :=
+| NotOccursNil : notOccursList n TL_nil
+| NotOccursCons (l : TermList) (M : Term)
+  : notOccursList n l -> notOccurs n M -> notOccursList n (TL_cons l M)
 with notOccursTermOpt (n : nat) : TermOpt -> Set :=
 | NotOccursNoTerm : notOccursTermOpt n NoTerm
 | NotOccursSomeTerm (M : Term) :
@@ -136,10 +201,146 @@ with notOccursInfo (n : nat) : IndInfo -> Set :=
 | NotOccursMkIndInfo (kind : Term) (ctorTypes : TermMSeq)
   : notOccurs n kind -> notOccursMSeq n ctorTypes ->
     notOccursInfo n (MkIndInfo kind ctorTypes)
+with notOccursElimInfo (n : nat) : ElimInfo -> Set :=
+| NotOccursMkElimInfo (info : IndInfo) (i : nat) (P : Term) (patts : TermMSeq)
+  : notOccursInfo n info -> notOccurs n P -> notOccursMSeq n patts ->
+    notOccursElimInfo n (MkElimInfo info i P patts)
 .
 
 
-(*** strict positivity for inductive types ***)
+(*** substitution and lifting ***)
+
+(* README: k is the amount we are incrementing the variables, and n is the
+ * number of variable bindings under which we have traversed so far *)
+Fixpoint lift (n k : nat) (M : Term) {struct M} : Term :=
+  match M with
+    | Prp => Prp
+    | Tp i => Tp i
+    | Pi A B => Pi (lift n k A) (lift (S n) k B)
+    | IndType info params =>
+      IndType (liftIndInfo n k info) (liftList n k params)
+    | Var i =>
+      match le_lt_dec n i with
+        | left _ => Var (i + k) (* case: i >= n *)
+        | right _ => Var i (* case: i < n *)
+      end
+    | App M1 M2 => App (lift n k M1) (lift n k M2)
+    | Lam A M1 => Lam (lift n k A) (lift (S n) k M1)
+    | CtorApp info i params =>
+      CtorApp (liftIndInfo n k info) i (liftList n k params)
+    | Elim einfo params scrut =>
+      Elim (liftElimInfo n k einfo) (liftList n k params) (lift n k scrut)
+  end
+with liftList (n k : nat) (l : TermList) {struct l} :=
+  match l with
+    | TL_nil => TL_nil
+    | TL_cons l' M => TL_cons (liftList n k l') (lift n k M)
+  end
+with liftOpt (n k : nat) (M_opt : TermOpt) {struct M_opt} :=
+  match M_opt with
+    | SomeTerm M => SomeTerm (lift n k M)
+    | NoTerm => NoTerm
+  end
+with liftIndInfo (n k : nat) (info : IndInfo) {struct info} :=
+  match info with
+    | MkIndInfo sort ctors =>
+      MkIndInfo (lift n k sort) (fun i => liftOpt n k (ctors i))
+  end
+with liftElimInfo (n k : nat) (einfo : ElimInfo) :=
+  match einfo with
+    MkElimInfo info i P patts =>
+      MkElimInfo (liftIndInfo n k info) i (lift n k P)
+      (fun i => liftOpt n k (patts i))
+  end
+  .
+
+(* Grr, Coq cannot handle liftMSeq in the above mutal definitions... *)
+Definition liftMSeq (n k : nat) (seq : TermMSeq) :=
+  fun i => liftOpt n k (seq i).
+
+
+Definition Subst := TermList.
+
+(* README: n is the number of binders we have traversed *)
+Fixpoint substH (n : nat) (s : Subst) (M : Term) {struct M} : Term :=
+  match M with
+    | Prp => Prp
+    | Tp i => Tp i
+    | Pi A B => Pi (substH n s A) (substH (S n) s B)
+    | IndType info params =>
+      IndType (substIndInfo n s info) (substList n s params)
+    | Var i =>
+      match le_lt_dec n i with
+        | right _ => Var i (* case: i < n *)
+        | left _ => (* case: i >= n *)
+          match TL_nth_or_fail (i - n) s with
+            | inleft N => lift 0 n N
+            | _ => Var (i + n)
+          end
+      end
+    | App M1 M2 => App (substH n s M1) (substH n s M2)
+    | Lam A M1 => Lam (substH n s A) (substH (S n) s M1)
+    | CtorApp info i params =>
+      CtorApp (substIndInfo n s info) i (substList n s params)
+    | Elim einfo params scrut =>
+      Elim (substElimInfo n s einfo) (substList n s params) (substH n s scrut)
+  end
+with substList (n : nat) (s : Subst) (l : TermList) :=
+  match l with
+    | TL_nil => TL_nil
+    | TL_cons l' M => TL_cons (substList n s l') (substH n s M)
+  end
+with substOpt (n : nat) (s : Subst) (M_opt : TermOpt) :=
+  match M_opt with
+    | SomeTerm M => SomeTerm (substH n s M)
+    | NoTerm => NoTerm
+  end
+with substIndInfo (n : nat) (s : Subst) (info : IndInfo) :=
+  match info with
+    | MkIndInfo sort ctorTypes =>
+      MkIndInfo (substH n s sort) (fun i => substOpt n s (ctorTypes i))
+  end
+with substElimInfo (n : nat) (s : Subst) (einfo : ElimInfo) :=
+  match einfo with
+    | MkElimInfo info i P patts =>
+      MkElimInfo (substIndInfo n s info) i (substH n s P)
+      (fun i => substOpt n s (patts i))
+  end
+.
+
+Definition substMSeq (n : nat) (s : Subst) (seq : TermMSeq) :=
+  (fun i => substOpt n s (seq i)).
+
+Definition subst (s : Subst) (M : Term) := substH 0 s M.
+Definition substOne (N M : Term) := substH 0 (TL_cons TL_nil N) M.
+
+
+(***
+ *** helper functions defined in terms of substitution
+ ***)
+
+(* Return the result type of the application of a function of type
+   (x1:A1) -> .. -> (xn:An) -> B to a list of arguments N1 .. Nn;
+   i.e., substitute each Ni for xi in B. Return NoTerm if the function
+   type does not have enough Pi's for the given argument list.
+ *)
+Fixpoint typeApply (funtp : Term) (args : TermList) : TermOpt :=
+  match args with
+    | TL_nil => SomeTerm funtp
+    | TL_cons args' N =>
+      match funtp with
+        | Pi A B => match typeApply funtp args' with
+                      | SomeTerm Bres => SomeTerm (substOne N Bres)
+                      | NoTerm => NoTerm
+                    end
+        | _ => NoTerm
+      end
+  end.
+
+
+(***
+ *** definitions for inductive types
+ ***)
 
 (* Inductive types are given as a pair (kind, ctorTypes) of the kind
    of the inductive type constructor itself and a sequence of the
@@ -162,11 +363,12 @@ with notOccursInfo (n : nat) : IndInfo -> Set :=
    the return type of yi, and thus any later term containing y would
    have to mention the type of yi, which would contain X, which is
    disallowed by positivity. We do not prove this, however,
-
-   The typing constraints mentioned above are formalized below, after
-   typing is formalized. We only formalize strict positivity now.
  *)
 
+
+(**
+ ** strict positivity
+ **)
 
 (* Captures the fact that a term is X M1 .. Mn for some arguments Mi
    that do not contain X free.
@@ -202,107 +404,153 @@ Inductive positiveN (n : nat) : Term -> Set :=
 Definition positive := positiveN 0.
 
 
+(**
+ ** building the type of an eliminator
+ **)
 
-(*** substitution and lifting ***)
-
-(* README: k is the amount we are incrementing the variables, and n is the
- * number of variable bindings under which we have traversed so far *)
-Fixpoint lift (n k : nat) (M : Term) {struct M} : Term :=
-  match M with
-    | Prp => Prp
-    | Tp i => Tp i
-    | Pi A B => Pi (lift n k A) (lift (S n) k B)
-    | IndType info => IndType (liftIndInfo n k info)
-    | Var i =>
-      match le_lt_dec n i with
-        | left _ => Var (i + k) (* case: i >= n *)
-        | right _ => Var i (* case: i < n *)
+(* Helper function for elimtpCtor: builds the type of the recursive
+   calls. See comments for elimtpCtor below. NOTE: This also gives the
+   type of the result of buildRecElimCall.
+ *)
+Fixpoint buildRecCallType (n : nat) (A P xapp : Term) : TermOpt :=
+  match A with
+    | Pi C Arest =>
+      match buildRecCallType (S n) Arest (lift 0 1 P)
+        (App (lift 0 1 xapp) (Var 0))
+      with
+        | NoTerm => NoTerm
+        | SomeTerm res => SomeTerm (Pi C res)
       end
-    | App M1 M2 => App (lift n k M1) (lift n k M2)
-    | Lam A M1 => Lam (lift n k A) (lift (S n) k M1)
-    | Ctor info i => Ctor (liftIndInfo n k info) i
-    | Elim info i P patts =>
-      Elim (liftIndInfo n k info) i (lift n k P)
-      (fun i => liftOpt n k (patts i))
-  end
-with liftOpt (n k : nat) (M_opt : TermOpt) {struct M_opt} :=
-  match M_opt with
-    | SomeTerm M => SomeTerm (lift n k M)
-    | NoTerm => NoTerm
-  end
-with liftIndInfo (n k : nat) (info : IndInfo) {struct info} :=
-  match info with
-    | MkIndInfo sort ctors =>
-      MkIndInfo (lift n k sort) (fun i => liftOpt n k (ctors i))
-  end
-  .
-
-(* Grr, Coq cannot handle liftMSeq in the above mutal definitions... *)
-Definition liftMSeq (n k : nat) (seq : TermMSeq) :=
-  fun i => liftOpt n k (seq i).
+    | _ => match fst (matchApply A) with
+             | Var i => match eq_nat_dec i n with
+                          | left _ =>
+                            SomeTerm (App
+                              (apply P (snd (matchApply A)))
+                              xapp)
+                          | right _ => NoTerm
+                        end
+             | _ => NoTerm
+           end
+  end.
 
 
-Definition Subst := list Term.
+(* Build the type of the "recursive step" of a constructor of type ctp
+   for an inductive hypothesis predicate P. In more detail, ctp should
+   have the form (x1:A1) -> .. -> (xn:An) -> X M1 .. Mm, where X is
+   the variable corresponding to deBruijn index 0 outside ctp. The
+   recursive step should then have type
 
-Fixpoint substH (n : nat) (s : Subst) (M : Term) {struct M} : Term :=
-  match M with
-    | Prp => Prp
-    | Tp i => Tp i
-    | Pi A B => Pi (substH n s A) (substH (S n) s B)
-    | IndType info => IndType (substIndInfo n s info)
-    | Var i =>
-      match le_lt_dec n i with
-        | right _ => Var i (* case: i < n *)
-        | left _ => (* case: i >= n *)
-          match nth_or_fail (i - n) s with
-            | inleft N => lift 0 n N
-            | _ => Var (i + n)
-          end
-      end
-    | App M1 M2 => App (substH n s M1) (substH n s M2)
-    | Lam A M1 => Lam (substH n s A) (substH (S n) s M1)
-    | Ctor info i => Ctor (substIndInfo n s info) i
-    | Elim info i P patts =>
-      Elim (substIndInfo n s info) i (substH n s P)
-      (fun i => substOpt n s (patts i))
-  end
-with substOpt (n : nat) (s : Subst) (M_opt : TermOpt) :=
-  match M_opt with
-    | SomeTerm M => SomeTerm (substH n s M)
-    | NoTerm => NoTerm
-  end
-with substIndInfo (n : nat) (s : Subst) (info : IndInfo) :=
-  match info with
-    | MkIndInfo sort ctorTypes =>
-      MkIndInfo (substH n s sort) (fun i => substOpt n s (ctorTypes i))
-  end
-.
+   (x1:A1) -> (y1:B1)? -> .. (xn:An) -> (yn:Bn)? ->
+   P M1 .. Mm (c x1 .. xn)
 
-Definition substMSeq (n : nat) (s : Subst) (seq : TermMSeq) :=
-  (fun i => substOpt n s (seq i)).
+   where c is the constructor whose recursive step type we are
+   building and each Bi is, intuitively, the type of the result of a
+   recursive call on xi. To define Bi, we test to see if the type Ai
+   has the form (z1:C1) -> .. -> (zn:Cn) -> X N1 .. Nn; if so,
+   then Bi is defined as
 
-Definition subst (s : Subst) (M : Term) := substH 0 s M.
-Definition substOne (N M : Term) := substH 0 (N :: nil) M.
+   (z1:C1) -> .. -> (zn:Cn) -> P N1 .. Nn (xi z1 .. zn)
 
+   Otherwise, the binding (yi:Bi) is omitted.
 
-(***
- *** convertability
- ***)
+   To define this recursively, elimtpCtor takes ctp along with: the
+   predicate P; the numbers n and m of xi's and yi's, respectively,
+   that we have already added outside the current point in the
+   computation; and a term capp, which is c applied to all of the xi's
+   that have already been seen.
 
-(* The complicated thing here is to apply recursive eliminators. If
-   the inductive type represented by "info" has n constructors and m
-   index types, eliminators (when fully applied) have the form
-   (elim^(info) P f1 .. fn a1 .. am arg), where P is the predicate we
-   are trying to prove, f1 .. fn are the "step" cases for each of the
-   n constructors, a1 .. am are the type parameters, and arg is the
-   scrutinee being eliminated. If arg has the form (ci arg1 ... argk),
-   our elimination rewrites to:
+   NOTE: ctp has *not* been lifted into the yi bindings; this is to
+   avoid a recursive call on (lift 0 1 ctp') in the first case. Thus,
+   any uses of components matched in ctp must be lifted by m.
+ *)
 
-   fi arg1 ... argk (\x1 .. xl . elim P f1 .. fn M1 .. Mm (argj x1 .. xl)) ..
+Fixpoint elimtpCtor (n m : nat) (ctp P capp : Term) {struct ctp} : Term :=
+  match ctp with
+    | Pi A ctp' =>
+      Pi (lift 0 m A) (
+        match buildRecCallType ((S n)+m) (lift 0 (S m) A) (lift 0 1 P) (Var 0)
+        with
+          | SomeTerm B =>
+            Pi B (elimtpCtor (S n) (S m) ctp' (lift 0 2 P)
+              (App (lift 0 2 capp) (Var 1)))
+          | NoTerm =>
+            (elimtpCtor (S n) m ctp' (lift 0 1 P) (App (lift 0 1 capp) (Var 0)))
+        end
+      )
+    | _ => App (apply P (snd (matchApply ctp))) capp
+  end.
 
-   where the recursive calls to elim only happen for the recursive
-   argumens for constructor ci.
+(**
+ ** iota-reduction
+ **)
+
+(* The iota-rule is defined like this:
+
+   elim info i P f (M1 .. Mm) (cj N1 .. Nn)
+   -->
+   (f j) N1 N1'? N2 N2'? ...
+
+   If the type of Nk has the form (x1:A1) .. (xp:Ap) -> a P1 .. Pm,
+   then Nk'?  becomes a recursive call to the eliminator, of the form
+
+   \x1 .. xp -> elim info i P f (P1 .. Pm) (Nk x1 .. xp)
+
+   Otherwise, Nk'? is NoTerm, i.e., there is no argument for it.
 *)
+
+
+(* Build \x1 .. xp -> elim info i P f (P1 .. Pm) (Nk x1 .. xp) from
+   the type (x1:A1) .. (xp:Ap) -> a P1 .. Pm and the terms Nk and the
+   eliminator (elim info i P f)
+*)
+Fixpoint buildRecElimCall (n : nat) (Ntp N : Term) (einfo : ElimInfo)
+  : TermOpt :=
+  match Ntp with
+    | Pi A B =>
+      match buildRecElimCall (S n) B (App (lift 0 1 N) (Var 0))
+        (liftElimInfo 0 1 einfo)
+      with
+        | SomeTerm recResult => SomeTerm (Lam A recResult)
+        | NoTerm => NoTerm
+      end
+    | _ => match fst (matchApply Ntp) with
+             | Var i => match eq_nat_dec i n with
+                          | left _ =>
+                            SomeTerm (Elim einfo (snd (matchApply Ntp)) N)
+                          | right _ => NoTerm
+                        end
+             | _ => NoTerm
+           end
+  end.
+
+
+(* Build the term "(f j) N1 N1'? N2 N2'? ...", the result of iota
+   reduction, from "elim info i P f (M1 .. Mm) (cj N1 .. Nn)", where M
+   = (f j), ctp = the type of cj, cargs = N1 .. Nn, and einfo is the
+   ElimInfo containing (info, i, P, f).
+
+   Typing Invariants: M has type Mtp = elimtp P cj ctp, i.e., the type a
+   "recursive step" for a constructor of type ctp; and cargs match
+   some prefix of the argument types of ctp, i.e., typeApply ctp cargs
+   is not NoTerm.
+
+   Typing Result: The resulting term should have the following type:
+   elimtpCtor 0 0 (typeApply ctp cargs) P ((\x1 .. xn -> cj x1 .. xn) cargs)
+ *)
+Fixpoint buildIotaResult (ctp M : Term) (cargs : TermList) (einfo : ElimInfo)
+  {struct cargs} : Term :=
+  match cargs with
+    | TL_nil => M
+    | TL_cons cargs' Ni =>
+      match typeApply ctp cargs with
+        | SomeTerm (Pi A B) =>
+          apply1opt (buildIotaResult ctp M cargs' einfo)
+          (buildRecElimCall 0 A Ni einfo)
+        | _ =>
+          (* README: should never happen *)
+          (buildIotaResult ctp M cargs' einfo)
+      end
+  end.
 
 FIXME HERE:
 
